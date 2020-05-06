@@ -5,28 +5,24 @@ use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 
 use crate::epoll::Epoll;
+use crate::tcp_event::TcpEvent;
 use crate::utils;
 
-pub struct Listen {
-    recv: fn(u64),
-    send: fn(u64),
-    error: fn(u64),
+pub struct TcpListen {
+    token: u64,
     epoll: Epoll,
-    net_token: u64,
+    tcp_event: TcpEvent,
     tcp_listen: TcpListener,
     events: Vec<libc::epoll_event>,
     accept: fn(TcpStream, SocketAddr),
 }
 
-impl Listen {
+impl TcpListen {
     pub fn new(
+        token: u64,
         events: u16,
-        net_token: u64,
+        tcp_event: TcpEvent,
         socekt_addr: &String,
-        recv: fn(u64),
-        send: fn(u64),
-        error: fn(u64),
-        accept: fn(TcpStream, SocketAddr),
     ) -> Result<Self, String> {
         let mut max_event = events;
         if max_event < 16 {
@@ -56,11 +52,8 @@ impl Listen {
         epoll.ctl_add_fd(net_token as u64, tcp_listen.as_raw_fd(), libc::EPOLLIN)?;
 
         Ok(Listen {
-            recv: recv,
-            send: send,
-            error: error,
-            accept: accept,
             epoll: epoll,
+            tcp_event: tcp_event,
             net_token: net_token,
             tcp_listen: tcp_listen,
             events: vec![libc::epoll_event { events: 0, u64: 0 }; max_event as usize],
@@ -79,9 +72,7 @@ impl Listen {
             if event.u64 == self.net_token {
                 loop {
                     match self.tcp_listen.accept() {
-                        Ok((socket, socket_addr)) => {
-                            (self.accept)(socket, socket_addr)
-                        }
+                        Ok((socket, socket_addr)) => (self.accept)(socket, socket_addr),
                         Err(_) => break,
                     }
                 }

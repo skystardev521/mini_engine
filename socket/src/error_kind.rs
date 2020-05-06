@@ -1,6 +1,6 @@
-use std::io::ErrorKind;
+use std::io;
 
-pub enum NetErrorKind {
+pub enum ErrorKind {
     /// An entity was not found, often a file.
     NotFound,
     /// The operation lacked the necessary privileges to complete.
@@ -74,26 +74,27 @@ pub enum NetErrorKind {
     NetPackSizeTooLarge,
 }
 
-pub fn as_neterrkind(error: ErrorKind) -> NetErrorKind {
+/// io:ErrorKind ---->ErrorKind
+pub fn to_error_kind(error: io::ErrorKind) -> ErrorKind {
     return match error {
-        ErrorKind::NotFound => NetErrorKind::NotFound,
-        ErrorKind::PermissionDenied => NetErrorKind::PermissionDenied,
-        ErrorKind::ConnectionRefused => NetErrorKind::ConnectionRefused,
-        ErrorKind::ConnectionReset => NetErrorKind::ConnectionReset,
-        ErrorKind::ConnectionAborted => NetErrorKind::ConnectionAborted,
-        ErrorKind::NotConnected => NetErrorKind::NotConnected,
-        ErrorKind::AddrInUse => NetErrorKind::AddrInUse,
-        ErrorKind::AddrNotAvailable => NetErrorKind::AddrNotAvailable,
-        ErrorKind::BrokenPipe => NetErrorKind::BrokenPipe,
-        ErrorKind::AlreadyExists => NetErrorKind::AlreadyExists,
-        ErrorKind::WouldBlock => NetErrorKind::WouldBlock,
-        ErrorKind::InvalidInput => NetErrorKind::InvalidInput,
-        ErrorKind::InvalidData => NetErrorKind::InvalidData,
-        ErrorKind::TimedOut => NetErrorKind::TimedOut,
-        ErrorKind::WriteZero => NetErrorKind::WriteZero,
-        ErrorKind::Interrupted => NetErrorKind::Interrupted,
-        ErrorKind::UnexpectedEof => NetErrorKind::UnexpectedEof,
-        ErrorKind::Other => NetErrorKind::Other,
-        _=> NetErrorKind::Other,
+        io::ErrorKind::NotFound => ErrorKind::NotFound,
+        io::ErrorKind::PermissionDenied => ErrorKind::PermissionDenied,
+        io::ErrorKind::ConnectionRefused => ErrorKind::ConnectionRefused,
+        io::ErrorKind::ConnectionReset => ErrorKind::ConnectionReset,
+        io::ErrorKind::ConnectionAborted => ErrorKind::ConnectionAborted,
+        io::ErrorKind::NotConnected => ErrorKind::NotConnected,
+        io::ErrorKind::AddrInUse => ErrorKind::AddrInUse,
+        io::ErrorKind::AddrNotAvailable => ErrorKind::AddrNotAvailable,
+        io::ErrorKind::BrokenPipe => ErrorKind::BrokenPipe,
+        io::ErrorKind::AlreadyExists => ErrorKind::AlreadyExists,
+        io::ErrorKind::WouldBlock => ErrorKind::WouldBlock,
+        io::ErrorKind::InvalidInput => ErrorKind::InvalidInput,
+        io::ErrorKind::InvalidData => ErrorKind::InvalidData,
+        io::ErrorKind::TimedOut => ErrorKind::TimedOut,
+        io::ErrorKind::WriteZero => ErrorKind::WriteZero,
+        io::ErrorKind::Interrupted => ErrorKind::Interrupted,
+        io::ErrorKind::UnexpectedEof => ErrorKind::UnexpectedEof,
+        io::ErrorKind::Other => ErrorKind::Other,
+        _ => NetErrorKind::Other,
     };
 }

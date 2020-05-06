@@ -1,4 +1,5 @@
 //use std::ffi::CStr;
+use crate::error_kind::ErrorKind;
 use crate::nettask::NetTask;
 use std::io::prelude::Read;
 use std::io::ErrorKind;

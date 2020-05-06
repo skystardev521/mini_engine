@@ -1,3 +1,6 @@
+pub mod bytes;
+pub mod ffi_ext;
+
 #[cfg(test)]
 mod tests {
     #[test]

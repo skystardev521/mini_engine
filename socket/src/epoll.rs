@@ -2,6 +2,7 @@ use libc;
 use std::os::unix::io::RawFd;
 
 use crate::utils;
+use utils::ffi_ext;
 
 #[derive(Debug)]
 pub struct Epoll {
@@ -25,7 +26,7 @@ impl Epoll {
                 epoll.epoll_fd = fd;
                 return Ok(epoll);
             } else {
-                return Err(utils::c_err_string());
+                return Err(ffi_ext::());
             }
         }
     }

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 //#[inline]
 //pub fn get_au64_id() -> u64 {
- //   NEXT_ID.fetch_add(1, Ordering::SeqCst)
+//   NEXT_ID.fetch_add(1, Ordering::SeqCst)
 //}
 
 #[inline]
@@ -18,14 +18,6 @@ use std::sync::Arc;
 ///value(1,2,4,8,16,32,64,128)
 pub fn bit_match(total: u8, val: u8) -> bool {
     (total & val) == val
-}
-
-#[inline]
-pub fn c_err_string() -> String {
-    unsafe {
-        let str_err = libc::strerror(*libc::__errno_location());
-        return CStr::from_ptr(str_err).to_string_lossy().into_owned();
-    }
 }
 
 pub fn setsockopt<T>(fd: RawFd, opt_key: libc::c_int, opt_val: T) -> Result<(), String> {

@@ -34,7 +34,7 @@ impl TcpWriter {
         })
     }
 
-    pub fn task_num(&self) -> usize {
+    pub fn get_task_count(&self) -> usize {
         self.list.len()
     }
 
@@ -61,10 +61,11 @@ impl TcpWriter {
             if self.head_pos < HEAD_SIZE {
                 loop {
                     match stream.write(&self.head_data[self.head_pos..]) {
-                        Ok(0)=>
-                            //已写满缓冲区 不能再写到缓存区
-                            return Err(ErrorKind::WriteZero);
                         Ok(size) => {
+                            if 0 == size {
+                                //已写满缓冲区 不能再写到缓存区
+                                return Err(ErrorKind::WriteZero);
+                            }
                             self.head_pos += size;
                             if self.head_pos == HEAD_SIZE {
                                 break; //已写完 head_data
@@ -79,9 +80,14 @@ impl TcpWriter {
                     }
                 }
             }
+
             loop {
                 match stream.write(&task.buffer[self.buffer_pos..]) {
                     Ok(size) => {
+                        if 0 == size {
+                            //已写满缓冲区 不能再写到缓存区
+                            return Err(ErrorKind::WriteZero);
+                        }
                         self.buffer_pos += size;
                         if self.buffer_pos == task.buffer.len() {
                             //已写完当前buffer所有数据
