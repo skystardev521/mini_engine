@@ -1,0 +1,9 @@
+[workspace]
+
+members = [
+  "test",
+  "engine",
+  "socket",
+  "utils",
+  "mysql"
+]
