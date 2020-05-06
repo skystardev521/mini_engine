@@ -1,4 +1,7 @@
 
+use libc;
+use std::ffi::CStr;
+
 #[inline]
 pub fn strerror() -> String {
     unsafe {
