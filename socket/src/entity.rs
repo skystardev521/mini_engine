@@ -1,9 +1,9 @@
-pub struct NetData {
+pub struct NetMsg {
     pub token: u64,
-    pub task: NetTask,
+    pub net_data: NetData,
 }
 
-pub struct NetTask {
+pub struct NetData {
     //协议Id
     pub id: u16,
     //协议数据
@@ -11,8 +11,8 @@ pub struct NetTask {
 }
 
 ///Max Value 255
-pub enum Task_Id {
-    New_Client = 0,
-    Close_Client = 1,
-    Client_Close = 2,
+pub enum NetDataId {
+    NewClient = 0,
+    CloseClient = 1,
+    ClientClose = 2,
 }
