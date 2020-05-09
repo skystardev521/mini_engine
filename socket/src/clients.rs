@@ -46,7 +46,7 @@ impl Clients {
         self.hash_map.len()
     }
 
-    pub fn add_Client(&mut self, id: u64, stream: TcpStream) -> Option<Client> {
+    pub fn add_client(&mut self, id: u64, stream: TcpStream) -> Option<Client> {
         if self.hash_map.len() == self.hash_map.capacity() {
             return None;
         }
@@ -57,7 +57,6 @@ impl Clients {
 
 impl Client {
     /// max_size: net data max size
-    /// net_task_cb: new net task call
     pub fn new(stream: TcpStream, msg_max_size: u32) -> Self {
         Client {
             stream: stream,

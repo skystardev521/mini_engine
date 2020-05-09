@@ -3,6 +3,7 @@ use crate::entity::NetData;
 use std::io::prelude::Read;
 use std::io::{Error, ErrorKind};
 use std::net::TcpStream;
+use std::mem;
 
 use utils::bytes;
 
@@ -25,7 +26,7 @@ pub struct TcpReader {
     id: u16,
     head_pos: usize,
     body_max_size: usize,
-    net_data: NetData,
+    net_data: Box<NetData>,
     head_data: [u8; HEAD_SIZE],
 }
 
@@ -37,10 +38,10 @@ impl TcpReader {
             head_pos: 0,
             head_data: [0u8; HEAD_SIZE],
             body_max_size: msg_max_size as usize - HEAD_SIZE,
-            net_data: /*Box::new(*/NetData {
+            net_data: Box::new(NetData {
                 id: 0,
                 buffer: vec![0u8; 0],
-            }/*)*/,
+            }),
         })
     }
 
@@ -79,14 +80,14 @@ impl TcpReader {
                                     self.head_pos = 0;
                                     net_data_cb(Box::new(NetData {
                                         id: id,
-                                        buffer: vec![0u8; 0],
+                                        buffer: vec![],
                                     }));
                                     continue;
                                 } else {
-                                    self.net_data = /*Box::new(*/NetData {
+                                    self.net_data = Box::new(NetData {
                                         id: id,
                                         buffer: vec![0u8; buffer_size],
-                                    }/*)*/;
+                                    });
                                     break; //读完包头数据
                                 }
                             }
@@ -108,9 +109,8 @@ impl TcpReader {
             }
 
             loop {
-                let net_data = self.net_data;
-                let buffer_pos = net_data.buffer.len();
-                match stream.read(&mut net_data.buffer[buffer_pos..]) {
+                let buffer_pos = self.net_data.buffer.len();
+                match stream.read(&mut self.net_data.buffer[buffer_pos..]) {
                     Ok(0) => {
                         println!("ErrorKind::Interrupted");
                         println!("stream.read result 0");
@@ -118,9 +118,10 @@ impl TcpReader {
                     }
                     Ok(_size) => {
                         //读取到的字节数
-                        if net_data.buffer.len() == net_data.buffer.capacity() {
+                        if self.net_data.buffer.len() == self.net_data.buffer.capacity() {
                             //读完一个包
-                            net_data_cb(Box::new(net_data));
+                            let tmp_net_data = Box::new(NetData{id:0,buffer:vec![]});
+                            net_data_cb(mem::replace(&mut self.net_data, tmp_net_data));
                             break;
                         } else {
                             //缓冲区已读完 包头数据 还没有读完
