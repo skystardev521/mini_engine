@@ -55,7 +55,7 @@ impl TcpWriter {
                 let id = self.id;
                 self.head_pos = 0;
                 self.buffer_pos = 0;
-                self.id = if id == MAX_ID { 0 } else { self.id + 1 };
+                if id == MAX_ID { self.id=0 } else { self.id += 1; };
 
                 let data_size = net_data.buffer.len() as u32;
                 let data_size_id = data_size << 12 + id as u32;

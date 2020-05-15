@@ -15,9 +15,9 @@ pub enum EnumResult {
 }
 
 pub struct Client {
-    stream: TcpStream,
-    tcp_reader: Box<TcpReader>,
-    tcp_writer: Box<TcpWriter>,
+    pub stream: TcpStream,
+    pub tcp_reader: Box<TcpReader>,
+    pub tcp_writer: Box<TcpWriter>,
     //socket_addr: SocketAddr,  TcpStream.peer_addr(&self) -> Result<SocketAddr>
 }
 

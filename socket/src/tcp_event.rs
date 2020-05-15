@@ -27,8 +27,8 @@ impl<'a> TcpEvent<'a> {
                 println!("new TcpStream:{}", addr);
                 println!("set_nonblocking:{}", err);
                 match tcp_socket.shutdown(Shutdown::Both) {
-                Ok(()) => (),
-                Err(err) => println!("shutdown:{}", err),
+                    Ok(()) => (),
+                    Err(err) => println!("shutdown:{}", err),
                 }
             }
         }

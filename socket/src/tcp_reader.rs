@@ -2,9 +2,9 @@ use crate::entity::NetData;
 
 use std::io::prelude::Read;
 use std::io::{Error, ErrorKind};
-use std::net::TcpStream;
 use std::mem;
-
+use std::net::TcpStream;
+use crate::clients::Client;
 use utils::bytes;
 
 //包ID最大值
@@ -47,10 +47,12 @@ impl TcpReader {
 
     pub fn read(
         &mut self,
-        stream: &mut TcpStream,
+        //stream: &mut TcpStream,
+        client: &mut Client,
         net_data_cb: fn(Box<NetData>),
     ) -> Result<EnumResult, Error> {
         loop {
+            let mut stream = &client.stream;
             if self.head_pos != HEAD_SIZE {
                 loop {
                     let head_pos = self.head_data.len();
@@ -67,7 +69,7 @@ impl TcpReader {
                                 if pack_id != self.id {
                                     return Ok(EnumResult::MsgPackIdError);
                                 }
-                                self.id += 1;
+                                if self.id == MAX_ID { self.id = 0 } else { self.id += 1;};
 
                                 let buffer_size = (data >> 12) as usize;
                                 if buffer_size > self.body_max_size {
@@ -120,7 +122,10 @@ impl TcpReader {
                         //读取到的字节数
                         if self.net_data.buffer.len() == self.net_data.buffer.capacity() {
                             //读完一个包
-                            let tmp_net_data = Box::new(NetData{id:0,buffer:vec![]});
+                            let tmp_net_data = Box::new(NetData {
+                                id: 0,
+                                buffer: vec![],
+                            });
                             net_data_cb(mem::replace(&mut self.net_data, tmp_net_data));
                             break;
                         } else {
