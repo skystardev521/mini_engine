@@ -3,6 +3,8 @@ use std::net::Shutdown;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 
+use crate::entity::NetData;
+
 pub struct TcpEvent<'a> {
     clients: &'a mut Clients,
 }
@@ -12,17 +14,46 @@ impl<'a> TcpEvent<'a> {
         TcpEvent { clients: clients }
     }
 
-    pub fn recv(&self, id: u64) {}
-
-    pub fn send(&self, id: u64) {
-        //clients.hash_map.
+    pub fn read(&mut self, id: u64) {
+        if let Some(client) = self.clients.map.get_mut(&id) {
+            client.read(|net_data: Box<NetData>| println!("id:{}", &net_data.id));
+        }else
+        {
+            println!("client Id:{} Not exists", &id)
+        }
     }
 
-    pub fn error(&self, id: u64) {}
+    pub fn write(&mut self, id: u64) {
+        if let Some(client) = self.clients.map.get_mut(&id) {
+            match client.tcp_writer.write(&mut client.stream){
+                Ok(er)=> println!("er:{:?}", er),
+                Err(err)=>println!("err:{}", err),
+            }
+        }else
+        {
+            println!("client Id:{} Not exists", &id)
+        }
+    }
 
-    pub fn accept(&self, tcp_socket: TcpStream, addr: SocketAddr) {
+    pub fn error(&mut self, id: u64) {
+        if let Some(client) = self.clients.map.get_mut(&id) {
+            match client.tcp_writer.write(&mut client.stream){
+                Ok(er)=> println!("er:{:?}", er),
+                Err(err)=>println!("err:{}", err),
+            }
+        }else
+        {
+            println!("client Id:{} Not exists", &id)
+        }
+    }
+
+    pub fn accept(&mut self, tcp_socket: TcpStream, addr: SocketAddr) {
         match tcp_socket.set_nonblocking(true) {
-            Ok(()) => println!("new TcpStream:{}", addr),
+            Ok(()) => {
+                println!("new TcpStream:{}", addr);
+
+                self.clients.add_client(123456789, tcp_socket);
+            }
             Err(err) => {
                 println!("new TcpStream:{}", addr);
                 println!("set_nonblocking:{}", err);

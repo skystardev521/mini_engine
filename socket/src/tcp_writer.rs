@@ -12,6 +12,7 @@ const MAX_ID: u16 = 4096;
 ///(包体字节数 13~32位)+(包Id 1~12位) + NetDataId
 const HEAD_SIZE: usize = 6;
 
+#[derive(Debug)]
 pub enum EnumResult {
     OK,
     WriteZeroSize,
@@ -49,13 +50,17 @@ impl TcpWriter {
         self.list.push_back(net_data);
     }
 
-    pub fn loop_write(&mut self, stream: &mut TcpStream) -> Result<EnumResult, Error> {
+    pub fn write(&mut self, stream: &mut TcpStream) -> Result<EnumResult, Error> {
         while let Some(net_data) = self.list.front() {
             if self.head_pos < HEAD_SIZE || self.buffer_pos < net_data.buffer.len() {
                 let id = self.id;
                 self.head_pos = 0;
                 self.buffer_pos = 0;
-                if id == MAX_ID { self.id=0 } else { self.id += 1; };
+                if id == MAX_ID {
+                    self.id = 0
+                } else {
+                    self.id += 1;
+                };
 
                 let data_size = net_data.buffer.len() as u32;
                 let data_size_id = data_size << 12 + id as u32;

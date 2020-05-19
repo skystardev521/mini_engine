@@ -1,10 +1,10 @@
+/*
+use crate::clients::Client;
 use crate::entity::NetData;
-
 use std::io::prelude::Read;
 use std::io::{Error, ErrorKind};
 use std::mem;
 use std::net::TcpStream;
-use crate::clients::Client;
 use utils::bytes;
 
 //包ID最大值
@@ -69,7 +69,11 @@ impl TcpReader {
                                 if pack_id != self.id {
                                     return Ok(EnumResult::MsgPackIdError);
                                 }
-                                if self.id == MAX_ID { self.id = 0 } else { self.id += 1;};
+                                if self.id == MAX_ID {
+                                    self.id = 0
+                                } else {
+                                    self.id += 1;
+                                };
 
                                 let buffer_size = (data >> 12) as usize;
                                 if buffer_size > self.body_max_size {
@@ -147,7 +151,7 @@ impl TcpReader {
             }
         }
     }
-
+    */
     /*
     ///包头上长度为4字节
     ///1~12位(包Id)
@@ -262,4 +266,5 @@ impl TcpReader {
         }
     }
     */
-}
+//}
+

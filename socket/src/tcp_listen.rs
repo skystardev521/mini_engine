@@ -82,10 +82,10 @@ impl<'a> TcpListen<'a> {
                     }
 
                     if (event.events & libc::EPOLLIN as u32) != 0 {
-                        self.tcp_event.recv(event.u64);
+                        self.tcp_event.read(event.u64);
                     }
                     if (event.events & libc::EPOLLOUT as u32) != 0 {
-                        self.tcp_event.send(event.u64);
+                        self.tcp_event.write(event.u64);
                     }
                     if (event.events & libc::EPOLLERR as u32) != 0 {
                         self.tcp_event.error(event.u64);
