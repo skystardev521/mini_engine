@@ -10,6 +10,18 @@ enum TestEnum{
 
 
 fn main() {
+
+    //'outer1: 
+    for x in 0..5 {
+        for y in 0..5 {
+            if y > 2{
+                break;// 'outer1
+            }
+            println!("x: {}, y: {}", x, y);
+        }
+    }
+
+
     let (tx, rx) = std::sync::mpsc::channel();
 
     std::thread::spawn(move || {
