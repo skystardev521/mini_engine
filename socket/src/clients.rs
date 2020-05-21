@@ -1,6 +1,5 @@
 use crate::entity::NetData;
-//use crate::tcp_reader;
-//use crate::tcp_reader::TcpReader;
+use crate::tcp_reader::TcpReader;
 use crate::tcp_writer::TcpWriter;
 use std::collections::HashMap;
 use std::net::TcpStream;
@@ -32,6 +31,7 @@ pub enum EnumResult {
     MsgPackIdError,
 }
 
+/*
 pub struct TcpReader {
     //包id(0~4096)
     id: u16,
@@ -40,11 +40,12 @@ pub struct TcpReader {
     net_data: Box<NetData>,
     head_data: [u8; HEAD_SIZE],
 }
-
+*/
 
 pub struct Client {
     pub stream: TcpStream,
     pub tcp_reader: Box<TcpReader>,
+    //pub tcp_reader: Box<TcpReader>,
     pub tcp_writer: Box<TcpWriter>,
     //socket_addr: SocketAddr,  TcpStream.peer_addr(&self) -> Result<SocketAddr>
 }
@@ -74,24 +75,26 @@ impl Clients {
         self.map.len()
     }
 
-    pub fn add_client(&mut self, id: u64, stream: TcpStream) -> Option<Client> {
+    pub fn add_client(&mut self, id: u64, stream: TcpStream, net_data_cb: fn(Box<NetData>)) -> Option<Client> {
         if self.map.len() == self.map.capacity() {
             return None;
         }
-        self.map.insert(id, Client::new(stream, self.msg_max_size))
+        self.map.insert(id, Client::new(stream, self.msg_max_size, net_data_cb))
     }
 }
 
 impl Client {
     /// max_size: net data max size
-    pub fn new(stream: TcpStream, msg_max_size: u32) -> Self {
+    pub fn new(stream: TcpStream, msg_max_size: u32, net_data_cb: fn(Box<NetData>)) -> Self {
         Client {
             stream: stream,
             tcp_writer: TcpWriter::new(),
-            tcp_reader: Client::new_tcp_reader(msg_max_size),//TcpReader::new(msg_max_size),
+            tcp_reader: TcpReader::new(msg_max_size, net_data_cb),
+            //tcp_reader: Client::new_tcp_reader(msg_max_size),//TcpReader::new(msg_max_size),
         }
     }
 
+    /*
     pub(crate) fn new_tcp_reader(msg_max_size: u32) -> Box<TcpReader> {
         Box::new(TcpReader {
             id: 0,
@@ -205,4 +208,5 @@ impl Client {
             }
         }
     }
+    */
 }

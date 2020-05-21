@@ -1,4 +1,4 @@
-/*
+
 use crate::clients::Client;
 use crate::entity::NetData;
 use std::io::prelude::Read;
@@ -28,16 +28,18 @@ pub struct TcpReader {
     body_max_size: usize,
     net_data: Box<NetData>,
     head_data: [u8; HEAD_SIZE],
+    net_data_cb: fn(Box<NetData>)
 }
 
 impl TcpReader {
     ///err:-1, 256 <= msg_max_size <= 1024 * 1024
-    pub fn new(msg_max_size: u32) -> Box<Self> {
+    pub fn new(msg_max_size: u32, net_data_cb: fn(Box<NetData>)) -> Box<Self> {
         Box::new(TcpReader {
             id: 0,
             head_pos: 0,
             head_data: [0u8; HEAD_SIZE],
             body_max_size: msg_max_size as usize - HEAD_SIZE,
+            net_data_cb: net_data_cb,
             net_data: Box::new(NetData {
                 id: 0,
                 buffer: vec![0u8; 0],
@@ -47,12 +49,13 @@ impl TcpReader {
 
     pub fn read(
         &mut self,
-        //stream: &mut TcpStream,
-        client: &mut Client,
-        net_data_cb: fn(Box<NetData>),
+        stream: &mut TcpStream
+        //client: &mut Client,
+        //net_data_cb: fn(Box<NetData>
+        //),
     ) -> Result<EnumResult, Error> {
         loop {
-            let mut stream = &client.stream;
+            //let mut stream = &client.stream;
             if self.head_pos != HEAD_SIZE {
                 loop {
                     let head_pos = self.head_data.len();
@@ -84,7 +87,7 @@ impl TcpReader {
                                 if buffer_size == 0 {
                                     //读完一个包
                                     self.head_pos = 0;
-                                    net_data_cb(Box::new(NetData {
+                                    (self.net_data_cb)(Box::new(NetData {
                                         id: id,
                                         buffer: vec![],
                                     }));
@@ -130,7 +133,7 @@ impl TcpReader {
                                 id: 0,
                                 buffer: vec![],
                             });
-                            net_data_cb(mem::replace(&mut self.net_data, tmp_net_data));
+                            (self.net_data_cb)(mem::replace(&mut self.net_data, tmp_net_data));
                             break;
                         } else {
                             //缓冲区已读完 包头数据 还没有读完
@@ -151,7 +154,7 @@ impl TcpReader {
             }
         }
     }
-    */
+}
     /*
     ///包头上长度为4字节
     ///1~12位(包Id)
