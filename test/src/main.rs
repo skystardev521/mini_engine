@@ -20,10 +20,12 @@ fn main() {
 
     let (tx, rx) = std::sync::mpsc::channel();
 
-    std::thread::spawn(move || {
+    let child_thread = std::thread::spawn(move || {
         let val = String::from("hi");
         tx.send(TestEnum::Err).unwrap();
     });
+
+    child_thread.join().unwrap();
 
     let received = rx.recv().unwrap();
     println!("Got: {:?}", received);

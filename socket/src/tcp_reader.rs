@@ -8,7 +8,7 @@ use std::net::TcpStream;
 use utils::bytes;
 
 //包ID最大值
-const MAX_ID: u16 = 4096;
+const MSG_MAX_ID: u16 = 4096;
 ///数据包头长度 6 个字节
 ///(包体字节数 13~32位)+(包Id 1~12位) + 任务Id
 const HEAD_SIZE: usize = 6;
@@ -25,20 +25,20 @@ pub struct TcpReader {
     //包id(0~4096)
     id: u16,
     head_pos: usize,
-    body_max_size: usize,
+    max_size: usize,
     net_data: Box<NetData>,
     head_data: [u8; HEAD_SIZE],
     net_data_cb: fn(Box<NetData>)
 }
 
 impl TcpReader {
-    ///err:-1, 256 <= msg_max_size <= 1024 * 1024
-    pub fn new(msg_max_size: u32, net_data_cb: fn(Box<NetData>)) -> Box<Self> {
+    ///err:-1, max_size <= 1024 * 1024
+    pub fn new(max_size: u32, net_data_cb: fn(Box<NetData>)) -> Box<Self> {
         Box::new(TcpReader {
             id: 0,
             head_pos: 0,
             head_data: [0u8; HEAD_SIZE],
-            body_max_size: msg_max_size as usize - HEAD_SIZE,
+            max_size: max_size as usize - HEAD_SIZE,
             net_data_cb: net_data_cb,
             net_data: Box::new(NetData {
                 id: 0,
@@ -50,54 +50,51 @@ impl TcpReader {
     pub fn read(
         &mut self,
         stream: &mut TcpStream
-        //client: &mut Client,
-        //net_data_cb: fn(Box<NetData>
-        //),
     ) -> Result<EnumResult, Error> {
         loop {
-            //let mut stream = &client.stream;
             if self.head_pos != HEAD_SIZE {
                 loop {
-                    let head_pos = self.head_data.len();
-                    match stream.read(&mut self.head_data[head_pos..]) {
+                    //read head data
+                    match stream.read(&mut self.head_data[self.head_pos..]) {
                         Ok(0) => {
                             return Ok(EnumResult::ReadZeroSize);
                         }
-                        Ok(_size) => {
+                        Ok(size) => {
+                            self.head_pos += size;
                             //读取到的字节数
-                            if self.head_data.len() == HEAD_SIZE {
+                            if self.head_pos == HEAD_SIZE {
+                                
                                 let data = bytes::read_u32(&self.head_data);
-                                let pack_id = (data << 20 >> 20) as u16;
-
-                                if pack_id != self.id {
+                               
+                                if ((data << 20 >> 20) as u16) != self.id {
                                     return Ok(EnumResult::MsgPackIdError);
                                 }
-                                if self.id == MAX_ID {
+                                if self.id == MSG_MAX_ID {
                                     self.id = 0
                                 } else {
                                     self.id += 1;
                                 };
 
                                 let buffer_size = (data >> 12) as usize;
-                                if buffer_size > self.body_max_size {
+                                if buffer_size > self.max_size {
                                     return Ok(EnumResult::MsgSizeTooBig);
                                 }
 
-                                let id = bytes::read_u16(&self.head_data[4..]);
+                                let net_data_id = bytes::read_u16(&self.head_data[4..]);
                                 if buffer_size == 0 {
                                     //读完一个包
                                     self.head_pos = 0;
                                     (self.net_data_cb)(Box::new(NetData {
-                                        id: id,
+                                        id: net_data_id,
                                         buffer: vec![],
                                     }));
                                     continue;
                                 } else {
                                     self.net_data = Box::new(NetData {
-                                        id: id,
+                                        id: net_data_id,
                                         buffer: vec![0u8; buffer_size],
                                     });
-                                    break; //读完包头数据
+                                    break; //读完包头数据 go to read buffer data
                                 }
                             }
                             //缓冲区已读完 包头数据 还没有读完
@@ -118,6 +115,7 @@ impl TcpReader {
             }
 
             loop {
+                //read buffer data
                 let buffer_pos = self.net_data.buffer.len();
                 match stream.read(&mut self.net_data.buffer[buffer_pos..]) {
                     Ok(0) => {
@@ -129,6 +127,7 @@ impl TcpReader {
                         //读取到的字节数
                         if self.net_data.buffer.len() == self.net_data.buffer.capacity() {
                             //读完一个包
+                            self.head_pos = 0;
                             let tmp_net_data = Box::new(NetData {
                                 id: 0,
                                 buffer: vec![],
