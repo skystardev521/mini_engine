@@ -21,7 +21,7 @@ fn main() {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let child_thread = std::thread::spawn(move || {
-        let val = String::from("hi");
+        
         tx.send(TestEnum::Err).unwrap();
     });
 

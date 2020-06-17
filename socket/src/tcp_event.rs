@@ -24,7 +24,10 @@ impl<'a> TcpEvent<'a> {
         }
         */
         if let Some(client) = self.clients.map.get_mut(&id) {
-            client.tcp_reader.read(&mut client.stream/*, |net_data: Box<NetData>| println!("id:{}", &net_data.id)*/);
+            match client.tcp_reader.read(&mut client.stream){
+                Ok(_)=> println!("ok"),
+                Err(_)=>println!("ok"),
+            }
         }else
         {
             println!("client Id:{} Not exists", &id)
