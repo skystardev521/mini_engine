@@ -8,30 +8,38 @@ enum TestEnum {
     Err,
 }
 
+use log::*;
+
 fn main() {
+    info!("starting up");
+    error!("sssssxxxxxxxxxxxxxxxxxxx");
+
     let server = std::thread::spawn(move || match Clients::new(99, 1024) {
         Ok(mut clients) => {
+            println!("server-->{:?}", std::thread::current().name());
+            println!("server-->{:?}", std::thread::current().id());
+
             let tcp_event = TcpEvent::new(&mut clients);
             match TcpListen::new(1, 99, &String::from("0.0.0.0:9988"), tcp_event) {
-                Ok(mut listen) => {
-                    loop{
-                        match listen.wait_events(1000){
-                            Ok(())=>(),
-                            Err(err)=> println!("wait_events:{}", err)
-                        }
+                Ok(mut listen) => loop {
+                    match listen.wait_events(1000) {
+                        Ok(()) => (),
+                        Err(err) => println!("wait_events:{}", err),
                     }
-                }
+                },
                 Err(err) => println!("tcplisten:new error:{}", err),
             }
         }
-        Err(err) => { println!("Clients::new error:{:?}", err)}
+        Err(err) => println!("Clients::new error:{:?}", err),
     });
 
-    let client = std::thread::spawn(move || {});
+    let client = std::thread::spawn(move || {
+        println!("client-->{:?}", std::thread::current().id());
+    });
 
     match server.join() {
-        Ok(())=> println!("server.join ok"),
-        Err(err)=>println!("server.join:{:?}", err)
+        Ok(()) => println!("server.join ok"),
+        Err(err) => println!("server.join:{:?}", err),
     }
 
     let (tx, rx) = std::sync::mpsc::channel();
