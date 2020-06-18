@@ -1,5 +1,3 @@
-
-use crate::clients::Client;
 use crate::entity::NetData;
 use std::io::prelude::Read;
 use std::io::{Error, ErrorKind};
@@ -10,7 +8,7 @@ use utils::bytes;
 //包ID最大值
 const MSG_MAX_ID: u16 = 4096;
 ///数据包头长度 6 个字节
-///(包体字节数 13~32位)+(包Id 1~12位) + 任务Id
+///(包体字节数 13~32位)+(包Id 1~12位) + 协议id(16位)
 const HEAD_SIZE: usize = 6;
 
 pub enum EnumResult {
@@ -28,7 +26,7 @@ pub struct TcpReader {
     max_size: usize,
     net_data: Box<NetData>,
     head_data: [u8; HEAD_SIZE],
-    net_data_cb: fn(Box<NetData>)
+    net_data_cb: fn(Box<NetData>),
 }
 
 impl TcpReader {
@@ -37,8 +35,8 @@ impl TcpReader {
         Box::new(TcpReader {
             id: 0,
             head_pos: 0,
+            max_size: max_size as usize,
             head_data: [0u8; HEAD_SIZE],
-            max_size: max_size as usize - HEAD_SIZE,
             net_data_cb: net_data_cb,
             net_data: Box::new(NetData {
                 id: 0,
@@ -47,10 +45,7 @@ impl TcpReader {
         })
     }
 
-    pub fn read(
-        &mut self,
-        stream: &mut TcpStream
-    ) -> Result<EnumResult, Error> {
+    pub fn read(&mut self, stream: &mut TcpStream) -> Result<EnumResult, Error> {
         loop {
             if self.head_pos != HEAD_SIZE {
                 loop {
@@ -63,9 +58,8 @@ impl TcpReader {
                             self.head_pos += size;
                             //读取到的字节数
                             if self.head_pos == HEAD_SIZE {
-                                
                                 let data = bytes::read_u32(&self.head_data);
-                               
+
                                 if ((data << 20 >> 20) as u16) != self.id {
                                     return Ok(EnumResult::MsgPackIdError);
                                 }
@@ -135,7 +129,7 @@ impl TcpReader {
                             (self.net_data_cb)(mem::replace(&mut self.net_data, tmp_net_data));
                             break;
                         } else {
-                            //缓冲区已读完 包头数据 还没有读完
+                            //缓冲区已读完 buffer数据 还没有读完
                             return Ok(EnumResult::BufferIsEmpty);
                         }
                     }
@@ -154,119 +148,118 @@ impl TcpReader {
         }
     }
 }
-    /*
-    ///包头上长度为4字节
-    ///1~12位(包Id)
-    ///13~32位(包体字节数)
-    fn split_pack(&mut self) -> Result<(), ErrorKind> {
+/*
+///包头上长度为4字节
+///1~12位(包Id)
+///13~32位(包体字节数)
+fn split_pack(&mut self) -> Result<(), ErrorKind> {
+    if self.body_size == 0 {
+        if self.in_pos - self.out_pos < HEAD_SIZE {
+            return Ok(());
+        }
+        let head_data: u32 = u8s_to_val(&self.buffer[self.out_pos..]);
+        let head_data = head_data as usize;
+        self.body_size = head_data >> 12;
+        let id = (head_data << 20 >> 20) as u16;
+        if id != self.id {
+            return Err(ErrorKind::InvalidData);
+        }
+
         if self.body_size == 0 {
-            if self.in_pos - self.out_pos < HEAD_SIZE {
-                return Ok(());
-            }
-            let head_data: u32 = u8s_to_val(&self.buffer[self.out_pos..]);
-            let head_data = head_data as usize;
-            self.body_size = head_data >> 12;
-            let id = (head_data << 20 >> 20) as u16;
-            if id != self.id {
-                return Err(ErrorKind::InvalidData);
-            }
 
-            if self.body_size == 0 {
-
-                //return Err(ErrorKind::InvalidData);
-            }
-
-            if MAX_ID == self.id {
-                self.id = 0;
-            } else {
-                self.id += 1;
-            }
-
-            if self.body_size > self.buffer_size - HEAD_SIZE {
-                return Err(ErrorKind::InvalidData);
-            }
+            //return Err(ErrorKind::InvalidData);
         }
 
-        let pack_size = self.body_size + HEAD_SIZE;
-        let data_size = self.in_pos - self.out_pos;
-        if data_size < pack_size {
-            if self.out_pos + pack_size > self.buffer_size {
-                //把数据移动到 self.out_pos = 0;
-                unsafe {
-                    ptr::copy(
-                        self.buffer.as_ptr().add(self.out_pos),
-                        self.buffer.as_mut_ptr().add(0),
-                        data_size,
-                    );
-                }
-                self.out_pos = 0;
-                self.in_pos = data_size;
-            }
-            return Ok(());
+        if MAX_ID == self.id {
+            self.id = 0;
+        } else {
+            self.id += 1;
         }
 
-        if data_size == pack_size {
-            //一个完整的包
-            //self.new_task(&self.buffer[self.out_pos..self.in_pos]);
+        if self.body_size > self.buffer_size - HEAD_SIZE {
+            return Err(ErrorKind::InvalidData);
+        }
+    }
+
+    let pack_size = self.body_size + HEAD_SIZE;
+    let data_size = self.in_pos - self.out_pos;
+    if data_size < pack_size {
+        if self.out_pos + pack_size > self.buffer_size {
+            //把数据移动到 self.out_pos = 0;
+            unsafe {
+                ptr::copy(
+                    self.buffer.as_ptr().add(self.out_pos),
+                    self.buffer.as_mut_ptr().add(0),
+                    data_size,
+                );
+            }
             self.out_pos = 0;
-            self.in_pos = 0;
-
-            return Ok(());
+            self.in_pos = data_size;
         }
-        //data_size 大于一个完整的包
-        let middle_pos = self.out_pos + pack_size;
-        //self.new_task(&self.buffer[self.out_pos..middle_pos]);
-
-        self.out_pos = middle_pos;
-        self.split_pack()
+        return Ok(());
     }
 
-    fn new_task(&mut self, buffer: &[u8]) {
-        if 2 == buffer.len() {
-            let mut net_task = NetTask {
-                id: 0,
-                buffer: vec![0u8; 1],
-            };
-        }
+    if data_size == pack_size {
+        //一个完整的包
+        //self.new_task(&self.buffer[self.out_pos..self.in_pos]);
+        self.out_pos = 0;
+        self.in_pos = 0;
 
-        self.body_size = 0; //
-                            //(self.pack_cb)(&self.buffer[self.out_pos..self.in_pos]);
-                            /*
-                            unsafe {
-                                std::ptr::copy_nonoverlapping(n.as_ptr(), buffer[0..len].as_mut_ptr(), len);
-                            }
-                            */
+        return Ok(());
+    }
+    //data_size 大于一个完整的包
+    let middle_pos = self.out_pos + pack_size;
+    //self.new_task(&self.buffer[self.out_pos..middle_pos]);
+
+    self.out_pos = middle_pos;
+    self.split_pack()
+}
+
+fn new_task(&mut self, buffer: &[u8]) {
+    if 2 == buffer.len() {
+        let mut net_task = NetTask {
+            id: 0,
+            buffer: vec![0u8; 1],
+        };
     }
 
-    pub fn read(&mut self, stream: &mut TcpStream) -> Result<(), ErrorKind> {
-        loop {
-            match stream.read(&mut self.buffer[self.in_pos..]) {
-                Ok(0) => {
-                    println!("ErrorKind::Interrupted");
-                    println!("stream.read result 0");
-                    //return Err(ErrorKind::ConnectionAborted);
-                }
-                Ok(size) => {
-                    //读取到的字节数
+    self.body_size = 0; //
+                        //(self.pack_cb)(&self.buffer[self.out_pos..self.in_pos]);
+                        /*
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(n.as_ptr(), buffer[0..len].as_mut_ptr(), len);
+                        }
+                        */
+}
 
-                    self.in_pos += size;
-                    match self.split_pack() {
-                        Ok(()) => continue,
-                        Err(e) => return Err(e),
-                    }
-                }
-                Err(ref e) if e.kind() == ErrorKind::Interrupted => {
-                    println!("ErrorKind::Interrupted");
-                    continue; ////系统中断 再read一次
-                }
-                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                    println!("ErrorKind::WouldBlock");
-                    continue; ////系统中断 再read一次
-                }
-                Err(e) => return Err(e.kind()),
+pub fn read(&mut self, stream: &mut TcpStream) -> Result<(), ErrorKind> {
+    loop {
+        match stream.read(&mut self.buffer[self.in_pos..]) {
+            Ok(0) => {
+                println!("ErrorKind::Interrupted");
+                println!("stream.read result 0");
+                //return Err(ErrorKind::ConnectionAborted);
             }
+            Ok(size) => {
+                //读取到的字节数
+
+                self.in_pos += size;
+                match self.split_pack() {
+                    Ok(()) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            Err(ref e) if e.kind() == ErrorKind::Interrupted => {
+                println!("ErrorKind::Interrupted");
+                continue; ////系统中断 再read一次
+            }
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                println!("ErrorKind::WouldBlock");
+                continue; ////系统中断 再read一次
+            }
+            Err(e) => return Err(e.kind()),
         }
     }
-    */
+}
+*/
 //}
-

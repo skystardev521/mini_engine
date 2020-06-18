@@ -1,27 +1,42 @@
-//use socket::utils;
-//use utils::bytes;
+use socket::clients::Clients;
+use socket::tcp_event::TcpEvent;
+use socket::tcp_listen::TcpListen;
 
 #[derive(Debug)]
-enum TestEnum{
+enum TestEnum {
     Ok,
     Err,
 }
 
 fn main() {
-
-    'outer1: for x in 0..5 {
-        for y in 0..5 {
-            if y > 2{
-                break 'outer1
+    let server = std::thread::spawn(move || match Clients::new(99, 1024) {
+        Ok(mut clients) => {
+            let tcp_event = TcpEvent::new(&mut clients);
+            match TcpListen::new(1, 99, &String::from("0.0.0.0:9988"), tcp_event) {
+                Ok(mut listen) => {
+                    loop{
+                        match listen.wait_events(1000){
+                            Ok(())=>(),
+                            Err(err)=> println!("wait_events:{}", err)
+                        }
+                    }
+                }
+                Err(err) => println!("tcplisten:new error:{}", err),
             }
-            println!("x: {}, y: {}", x, y);
         }
+        Err(err) => { println!("Clients::new error:{:?}", err)}
+    });
+
+    let client = std::thread::spawn(move || {});
+
+    match server.join() {
+        Ok(())=> println!("server.join ok"),
+        Err(err)=>println!("server.join:{:?}", err)
     }
 
     let (tx, rx) = std::sync::mpsc::channel();
 
     let child_thread = std::thread::spawn(move || {
-        
         tx.send(TestEnum::Err).unwrap();
     });
 

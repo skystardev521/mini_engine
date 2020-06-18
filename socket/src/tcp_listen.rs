@@ -72,8 +72,11 @@ impl<'a> TcpListen<'a> {
                                 Ok((socket, socket_addr)) => {
                                     self.tcp_event.accept(socket, socket_addr)
                                 }
+                                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                                    break;
+                                }
                                 Err(err) => {
-                                    println!("tcp_listen.accept:{:?}", err);
+                                    println!("tcp_listen.accept Error:{:?}", err);
                                     break;
                                 }
                             }
