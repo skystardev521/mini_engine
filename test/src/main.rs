@@ -1,18 +1,37 @@
 use socket::clients::Clients;
 use socket::tcp_event::TcpEvent;
 use socket::tcp_listen::TcpListen;
+use utils::logger;
+use utils::time_ext;
 
 #[derive(Debug)]
 enum TestEnum {
     Ok,
     Err,
 }
+pub struct ThreadPool {
+    handlers: Vec<std::thread::JoinHandle<()>>,
+}
+use log::{error, info};
 
-use log::*;
+use std::time::SystemTime;
 
 fn main() {
-    info!("starting up");
-    error!("sssssxxxxxxxxxxxxxxxxxxx");
+    let tx = time_ext::TimeExt::new(time_ext::timestamp());
+    println!("timesmp:{:?}", tx.timestamp());
+
+    logger::Logger::init(&String::from("info"), &String::from("test_log.log"));
+
+    let mut thread_pool: Vec<std::thread::JoinHandle<()>> = vec![];
+
+    for _ in 0..99 {
+        thread_pool.push(std::thread::spawn(move || {
+            for i in 0..9999 {
+                info!("thread_id-->{}:{:?}", i, std::thread::current().id());
+                //std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }));
+    }
 
     let server = std::thread::spawn(move || match Clients::new(99, 1024) {
         Ok(mut clients) => {
