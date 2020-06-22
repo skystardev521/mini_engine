@@ -2,7 +2,7 @@ use socket::clients::Clients;
 use socket::tcp_event::TcpEvent;
 use socket::tcp_listen::TcpListen;
 use utils::logger;
-use utils::time_ext;
+use utils::time;
 
 #[derive(Debug)]
 enum TestEnum {
@@ -14,19 +14,38 @@ pub struct ThreadPool {
 }
 use log::{error, info};
 
-use std::time::SystemTime;
-
 fn main() {
-    let tx = time_ext::TimeExt::new(time_ext::timestamp());
-    println!("timesmp:{:?}", tx.timestamp());
+    logger::Logger::init(&String::from("info"), String::from("logs/test_log.log"), 1000000);
 
-    logger::Logger::init(&String::from("info"), &String::from("test_log.log"));
+    //let tx = time::test();
+
+    info!("now_time:{:?}", time::now_time());
+
+    info!("timestamp:{}", time::timestamp());
+
+    let mut t = time::timestamp_to_time(time::timestamp());
+
+    t.month += 1;
+
+    info!("t:{:?}", t);
+
+    let ts = time::time_to_timestamp(&t);
+
+    info!("ts:{}", ts);
+
+    let mut t = time::timestamp_to_time(ts);
+
+    t.month += 1;
+
+    info!("t:{:?}", t);
+
+    //println!("timesmp:{:?}", tx.timestamp());
 
     let mut thread_pool: Vec<std::thread::JoinHandle<()>> = vec![];
 
     for _ in 0..99 {
         thread_pool.push(std::thread::spawn(move || {
-            for i in 0..9999 {
+            for i in 0..999999999 {
                 info!("thread_id-->{}:{:?}", i, std::thread::current().id());
                 //std::thread::sleep(std::time::Duration::from_millis(1));
             }

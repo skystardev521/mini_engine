@@ -1,7 +1,7 @@
 pub mod bytes;
 pub mod ffi_ext;
 pub mod logger;
-pub mod time_ext;
+pub mod time;
 
 #[cfg(test)]
 mod tests {
