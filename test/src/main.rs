@@ -15,31 +15,14 @@ pub struct ThreadPool {
 use log::{error, info};
 
 fn main() {
-    logger::Logger::init(&String::from("info"), String::from("logs/test_log.log"), 1000000);
-
-    //let tx = time::test();
-
-    info!("now_time:{:?}", time::now_time());
-
-    info!("timestamp:{}", time::timestamp());
-
-    let mut t = time::timestamp_to_time(time::timestamp());
-
-    t.month += 1;
-
-    info!("t:{:?}", t);
-
-    let ts = time::time_to_timestamp(&t);
-
-    info!("ts:{}", ts);
-
-    let mut t = time::timestamp_to_time(ts);
-
-    t.month += 1;
-
-    info!("t:{:?}", t);
-
-    //println!("timesmp:{:?}", tx.timestamp());
+    match logger::Logger::init(
+        &String::from("info"),
+        &String::from("logs/test_log.log"),
+        60 * 10,
+    ) {
+        Ok(()) => (),
+        Err(err) => println!("Logger::init error:{}", err),
+    }
 
     let mut thread_pool: Vec<std::thread::JoinHandle<()>> = vec![];
 
