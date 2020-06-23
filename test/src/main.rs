@@ -15,11 +15,7 @@ pub struct ThreadPool {
 use log::{error, info};
 
 fn main() {
-    match logger::Logger::init(
-        &String::from("info"),
-        &String::from("logs/test_log.log"),
-        60 * 10,
-    ) {
+    match logger::Logger::init(&String::from("info"), &String::from("logs/test_log.log"), 1) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),
     }
@@ -37,25 +33,25 @@ fn main() {
 
     let server = std::thread::spawn(move || match Clients::new(99, 1024) {
         Ok(mut clients) => {
-            println!("server-->{:?}", std::thread::current().name());
-            println!("server-->{:?}", std::thread::current().id());
+            info!("server-->{:?}", std::thread::current().name());
+            info!("server-->{:?}", std::thread::current().id());
 
             let tcp_event = TcpEvent::new(&mut clients);
             match TcpListen::new(1, 99, &String::from("0.0.0.0:9988"), tcp_event) {
                 Ok(mut listen) => loop {
                     match listen.wait_events(1000) {
                         Ok(()) => (),
-                        Err(err) => println!("wait_events:{}", err),
+                        Err(err) => info!("wait_events:{}", err),
                     }
                 },
-                Err(err) => println!("tcplisten:new error:{}", err),
+                Err(err) => info!("tcplisten:new error:{}", err),
             }
         }
-        Err(err) => println!("Clients::new error:{:?}", err),
+        Err(err) => info!("Clients::new error:{:?}", err),
     });
 
     let client = std::thread::spawn(move || {
-        println!("client-->{:?}", std::thread::current().id());
+        info!("client-->{:?}", std::thread::current().id());
     });
 
     match server.join() {
