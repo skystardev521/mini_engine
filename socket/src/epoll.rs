@@ -17,7 +17,7 @@ impl Drop for Epoll {
 }
 
 impl Epoll {
-    pub fn new() -> Result<Self, &'static str> {
+    pub fn new() -> Result<Self, String> {
         let mut epoll = Epoll { fd: -1 };
         unsafe {
             let fd = libc::epoll_create1(0);
@@ -25,13 +25,13 @@ impl Epoll {
                 epoll.fd = fd;
                 return Ok(epoll);
             } else {
-                return Err(ffi_ext::strerror());
+                return Err(ffi_ext::c_strerr());
             }
         }
     }
 
     #[inline]
-    pub fn ctl_add_fd(&self, id: u64, fd: RawFd, ev: i32) -> Result<(), &'static str> {
+    pub fn ctl_add_fd(&self, id: u64, fd: RawFd, ev: i32) -> Result<(), String> {
         let mut event = libc::epoll_event {
             u64: (id as libc::c_ulonglong),
             events: (libc::EPOLLET | ev) as u32,
@@ -41,11 +41,11 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(ffi_ext::strerror());
+            return Err(ffi_ext::c_strerr());
         }
     }
     #[inline]
-    pub fn ctl_mod_fd(&self, id: u64, fd: RawFd, ev: i32) -> Result<(), &'static str> {
+    pub fn ctl_mod_fd(&self, id: u64, fd: RawFd, ev: i32) -> Result<(), String> {
         let mut event = libc::epoll_event {
             u64: (id as libc::c_ulonglong),
             events: (libc::EPOLLET | ev) as u32,
@@ -55,11 +55,11 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(ffi_ext::strerror());
+            return Err(ffi_ext::c_strerr());
         }
     }
     #[inline]
-    pub fn ctl_del_fd(&self, id: u64, fd: RawFd) -> Result<(), &'static str> {
+    pub fn ctl_del_fd(&self, id: u64, fd: RawFd) -> Result<(), String> {
         let mut event = libc::epoll_event {
             events: 0,
             u64: (id as libc::c_ulonglong),
@@ -70,21 +70,20 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(ffi_ext::strerror());
+            return Err(ffi_ext::c_strerr());
         }
     }
     #[inline]
-    pub fn wait(
-        &mut self,
-        events: &mut Vec<libc::epoll_event>,
-        timeout: i32,
-    ) -> Result<u32, &'static str> {
+    pub fn wait(&self, timeout: i32, events: &mut Vec<libc::epoll_event>) -> Result<u32, String> {
         unsafe {
             let ret = libc::epoll_wait(self.fd, &mut events[0], events.len() as i32, timeout);
             if ret > -1 {
                 return Ok(ret as u32);
             }
-            return Err(ffi_ext::strerror());
+            if libc::EINTR == *libc::__errno_location() {
+                return Ok(0);
+            }
+            return Err(ffi_ext::c_strerr());
         }
     }
 }

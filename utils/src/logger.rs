@@ -10,6 +10,8 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+const HOUR_8: u64 = 8 * 60 * 60 * 1000;
+
 pub struct Logger /*<W: Write + Send + 'static>*/ {
     file_path: String,
     level: log::Level,
@@ -26,7 +28,7 @@ fn new_file_path(file_path: &String, time: &time::Time) -> String {
         time.year,
         time.month + 1,
         time.day,
-        time.hour + 8,
+        time.hour,
         time.min,
         time.sec
     )
@@ -49,7 +51,7 @@ fn fmt_log(record: &log::Record, time: &time::Time) -> String {
         time.year,
         time.month + 1,
         time.day,
-        time.hour + 8,
+        time.hour,
         time.min,
         time.sec,
         time.ms,
@@ -72,12 +74,11 @@ impl Logger /*<W>*/ {
             _ => log::Level::Error,
         };
 
-        let ts = time::timestamp();
         let path = Path::new(&file_path);
         if let Some(dir) = path.parent() {
             match fs::create_dir_all(&dir) {
                 Ok(()) => (),
-                Err(err) => return Err(format!("create_dir_all:{} error:{}", file_path, err)),
+                Err(err) => return Err(format!("create_dir:{:?} error:{}", dir, err)),
             }
         }
 
@@ -92,12 +93,13 @@ impl Logger /*<W>*/ {
             .open(&file_path)
         {
             Ok(file) => {
+                let ts = time::timestamp();
                 let logger = Box::new(Logger {
                     level: log_level,
                     file: Mutex::new(file),
                     file_path: file_path.clone(),
                     open_file_ts: Arc::new(AtomicU64::new(ts)),
-                    new_file_interval: new_file_duration as u64 * 60 * 60 * 1000
+                    new_file_interval: new_file_duration as u64 * 60 * 60 * 1000,
                 });
 
                 match log::set_boxed_logger(logger) {
@@ -105,7 +107,7 @@ impl Logger /*<W>*/ {
                     Ok(()) => Ok(log::set_max_level(log_level.to_level_filter())),
                 }
             }
-            Err(err) => Err(format!("file:{} error:{}", file_path, err)),
+            Err(err) => Err(format!("open:{} error:{}", &file_path, err)),
         }
     }
 }
@@ -121,12 +123,13 @@ impl log::Log for Logger /*<W>*/ {
         }
         if let Ok(mut file_lock) = self.file.lock() {
             let ts = time::timestamp();
-            let time = time::timestamp_to_time(ts);
+            let time = time::timestamp_to_time(ts + HOUR_8);
             if let Err(_err) = file_lock.write(fmt_log(&record, &time).as_bytes()) {
                 return;
             }
 
             //可优化 定时flush
+
             if let Err(_err) = file_lock.flush() {
                 return;
             }
@@ -136,7 +139,7 @@ impl log::Log for Logger /*<W>*/ {
                     return;
                 }
                 let open_file_ts = self.open_file_ts.load(Ordering::Relaxed);
-                let open_file_time = time::timestamp_to_time(open_file_ts);
+                let open_file_time = time::timestamp_to_time(open_file_ts + HOUR_8);
                 let new_file_path = new_file_path(&self.file_path, &open_file_time);
 
                 if let Err(_) = fs::rename(&self.file_path, &new_file_path) {
@@ -149,10 +152,10 @@ impl log::Log for Logger /*<W>*/ {
                     .open(&self.file_path)
                 {
                     Ok(file) => {
-                        *file_lock = file;
                         self.open_file_ts.store(ts, Ordering::Relaxed);
+                        *file_lock = file;
                     }
-                    Err(err) => println!("create log file ({}) error:{}", &self.file_path, err),
+                    Err(err) => println!("open file:{} error:{}", &self.file_path, err),
                 };
             }
         }

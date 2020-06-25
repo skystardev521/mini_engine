@@ -35,8 +35,9 @@ pub fn timestamp() -> u64 {
     }
 }
 
-pub fn now_time() -> Time {
-    timestamp_to_time(timestamp())
+//timezone：单位小时
+pub fn now_time(timezone: f32) -> Time {
+    timestamp_to_time(timestamp() + (timezone * 60f32 * 60f32 * 1000f32) as u64)
 }
 
 pub fn timestamp_to_time(timestamp: u64) -> Time {
@@ -140,15 +141,15 @@ pub fn time_to_timestamp(time: &Time) -> u64 {
     timestamp
 }
 
+/*
 pub fn test() {
     let mut time: u64 = 0;
     let mut time2: u64 = 0;
     let i: u64 = 0;
     let mut t: Time;
-    //2018-01-01 01:01:01
     time = 1592814558694;
     // 验证一个周期4年 一天打印一次
-    for i in 0..(4 * 365 + 1) {
+    for _i in 0..(4 * 365 + 1) {
         t = timestamp_to_time(time);
         println!("A time:{}", time);
         println!(
@@ -189,3 +190,4 @@ pub fn test() {
 
     return;
 }
+*/

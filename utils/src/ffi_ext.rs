@@ -3,6 +3,7 @@ use std::ffi::CStr;
 use std::mem;
 use std::os::unix::io::RawFd;
 
+/*
 #[inline]
 pub fn strerror() -> &'static str {
     unsafe {
@@ -16,8 +17,17 @@ pub fn strerror() -> &'static str {
         }
     }
 }
+*/
 
-pub fn setsockopt<T>(fd: RawFd, opt_key: libc::c_int, opt_val: T) -> Result<(), &'static str> {
+#[inline]
+pub fn c_strerr() -> String {
+    unsafe {
+        let cstr = libc::strerror(*libc::__errno_location());
+        CStr::from_ptr(cstr).to_string_lossy().to_string()
+    }
+}
+
+pub fn setsockopt<T>(fd: RawFd, opt_key: libc::c_int, opt_val: T) -> Result<(), String> {
     unsafe {
         let ret = libc::setsockopt(
             fd,
@@ -29,7 +39,7 @@ pub fn setsockopt<T>(fd: RawFd, opt_key: libc::c_int, opt_val: T) -> Result<(), 
         if ret == 0 {
             return Ok(());
         } else {
-            return Err(strerror());
+            return Err(c_strerr());
         }
     }
 }

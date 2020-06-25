@@ -1,8 +1,7 @@
-use socket::clients::Clients;
-use socket::tcp_event::TcpEvent;
-use socket::tcp_listen::TcpListen;
+use std::thread;
 use utils::logger;
 use utils::time;
+pub mod test_tcp;
 
 #[derive(Debug)]
 enum TestEnum {
@@ -10,7 +9,7 @@ enum TestEnum {
     Err,
 }
 pub struct ThreadPool {
-    handlers: Vec<std::thread::JoinHandle<()>>,
+    handlers: Vec<thread::JoinHandle<()>>,
 }
 use log::{error, info};
 
@@ -20,45 +19,20 @@ fn main() {
         Err(err) => println!("Logger::init error:{}", err),
     }
 
-    let mut thread_pool: Vec<std::thread::JoinHandle<()>> = vec![];
+    test_tcp::test();
 
-    for _ in 0..99 {
-        thread_pool.push(std::thread::spawn(move || {
-            for i in 0..999999999 {
-                info!("thread_id-->{}:{:?}", i, std::thread::current().id());
-                //std::thread::sleep(std::time::Duration::from_millis(1));
-            }
-        }));
-    }
+    /*
+        let mut thread_pool: Vec<thread::JoinHandle<()>> = vec![];
 
-    let server = std::thread::spawn(move || match Clients::new(99, 1024) {
-        Ok(mut clients) => {
-            info!("server-->{:?}", std::thread::current().name());
-            info!("server-->{:?}", std::thread::current().id());
-
-            let tcp_event = TcpEvent::new(&mut clients);
-            match TcpListen::new(1, 99, &String::from("0.0.0.0:9988"), tcp_event) {
-                Ok(mut listen) => loop {
-                    match listen.wait_events(1000) {
-                        Ok(()) => (),
-                        Err(err) => info!("wait_events:{}", err),
-                    }
-                },
-                Err(err) => info!("tcplisten:new error:{}", err),
-            }
+        for _ in 0..16 {
+            thread_pool.push(thread::spawn(move || {
+                for i in 0..99999999 {
+                    info!("thread_id-->{}:{:?}", i, std::thread::current().id());
+                    //std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }));
         }
-        Err(err) => info!("Clients::new error:{:?}", err),
-    });
-
-    let client = std::thread::spawn(move || {
-        info!("client-->{:?}", std::thread::current().id());
-    });
-
-    match server.join() {
-        Ok(()) => println!("server.join ok"),
-        Err(err) => println!("server.join:{:?}", err),
-    }
-
+    */
     let (tx, rx) = std::sync::mpsc::channel();
 
     let child_thread = std::thread::spawn(move || {
