@@ -408,8 +408,8 @@ pub fn write_u16(buffer: &mut [u8], n: u16) {
         return ();
     }
     let ns = n.to_le_bytes();
-    buffer[1] = ns[0];
-    buffer[0] = ns[1];
+    buffer[0] = ns[0];
+    buffer[1] = ns[1];
 }
 #[inline]
 pub fn write_i16(buffer: &mut [u8], n: i16) {
@@ -418,8 +418,8 @@ pub fn write_i16(buffer: &mut [u8], n: i16) {
         return ();
     }
     let ns = n.to_le_bytes();
-    buffer[1] = ns[0];
-    buffer[0] = ns[1];
+    buffer[0] = ns[0];
+    buffer[1] = ns[1];
 }
 
 #[inline]

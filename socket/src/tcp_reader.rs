@@ -1,3 +1,4 @@
+use crate::clients::ReadResult;
 use crate::message;
 use crate::message::MsgData;
 use crate::message::MsgHead;
@@ -8,34 +9,25 @@ use std::mem;
 use std::net::TcpStream;
 use utils::bytes;
 
-#[derive(Debug, PartialEq)]
-pub enum EnumResult {
-    OK,
-    ReadZeroSize,
-    MsgSizeTooBig,
-    BufferIsEmpty,
-    MsgPackIdError,
-}
-
 pub struct TcpReader {
     //包id(0~4096)
     id: u16,
     maxsize: u32,
     headpos: usize,
+    datapos: usize,
     msgdata: Box<MsgData>,
     headdata: [u8; message::MSG_HEAD_SIZE],
-    msgdatacb: fn(Box<MsgData>),
 }
 
 impl TcpReader {
     /// maxsize：消息的最大字节1024 * 1024
     /// msgdatacb：有新消息回调这个函数
-    pub fn new(maxsize: u32, msgdatacb: fn(Box<MsgData>)) -> Box<Self> {
+    pub fn new(maxsize: u32) -> Box<Self> {
         Box::new(TcpReader {
             id: 0,
             headpos: 0,
+            datapos: 0,
             headdata: [0u8; message::MSG_HEAD_SIZE],
-            msgdatacb: msgdatacb,
             msgdata: Box::new(MsgData {
                 id: 0,
                 data: vec![0u8; 0],
@@ -49,24 +41,13 @@ impl TcpReader {
     }
 
     #[inline]
-    fn deserialize_head(&self) -> MsgHead {
+    fn decode_head(&self) -> MsgHead {
         let data = bytes::read_u32(&self.headdata);
         MsgHead {
             id: (data << 20 >> 20) as u16,
             datasize: (data >> 12) as u32,
             dataid: bytes::read_u16(&self.headdata[4..]),
         }
-    }
-
-    #[inline]
-    fn check_head(&self, head: &MsgHead) -> EnumResult {
-        if head.dataid != self.id {
-            return EnumResult::MsgPackIdError;
-        }
-        if head.datasize > self.maxsize {
-            return EnumResult::MsgSizeTooBig;
-        }
-        EnumResult::OK
     }
 
     #[inline]
@@ -77,89 +58,86 @@ impl TcpReader {
         }
     }
 
-    pub fn read(&mut self, stream: &mut TcpStream) -> Result<EnumResult, String> {
-        loop {
-            if self.headpos != message::MSG_HEAD_SIZE {
-                loop {
-                    match stream.read(&mut self.headdata[self.headpos..]) {
-                        Ok(0) => return Ok(EnumResult::ReadZeroSize),
-                        Ok(size) => {
-                            self.headpos += size;
-                            //读取到的字节数
-                            if self.headpos == message::MSG_HEAD_SIZE {
-                                let head = self.deserialize_head();
-                                let result = self.check_head(&head);
-                                if result != EnumResult::OK {
-                                    return Ok(result);
-                                } else {
-                                    self.id_increment();
-                                }
-
-                                if head.datasize == 0 {
-                                    //读完一个包
-                                    self.headpos = 0;
-                                    (self.msgdatacb)(Box::new(MsgData {
-                                        id: head.dataid,
-                                        data: vec![],
-                                    }));
-                                    continue;
-                                } else {
-                                    self.msgdata = Box::new(MsgData {
-                                        id: head.dataid,
-                                        data: vec![0u8; head.datasize as usize],
-                                    });
-                                    break; //读完包头数据 go to read buffer data
-                                }
-                            }
-                            //缓冲区已读完 包头数据 还没有读完
-                            return Ok(EnumResult::BufferIsEmpty);
-                        }
-                        Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
-                            info!("ErrorKind::WouldBlock");
-                            //缓冲区已读完 包头数据 还没有读完
-                            return Ok(EnumResult::BufferIsEmpty);
-                        }
-                        Err(ref err) if err.kind() == ErrorKind::Interrupted => {
-                            info!("ErrorKind::Interrupted");
-                            continue; ////系统中断 再read一次
-                        }
-                        Err(err) => return Err(format!("{}", err)),
-                    }
-                }
-            }
-
+    pub fn read(&mut self, stream: &mut TcpStream) -> ReadResult {
+        if self.headpos != message::MSG_HEAD_SIZE {
             loop {
-                //read buffer data
-                let datapos = self.msgdata.data.len();
-                match stream.read(&mut self.msgdata.data[datapos..]) {
-                    Ok(0) => return Ok(EnumResult::ReadZeroSize),
-                    Ok(_size) => {
+                match stream.read(&mut self.headdata[self.headpos..]) {
+                    Ok(0) => return ReadResult::ReadZeroSize,
+                    Ok(size) => {
+                        self.headpos += size;
                         //读取到的字节数
-                        if self.msgdata.data.len() == self.msgdata.data.capacity() {
-                            //读完一个包
-                            self.headpos = 0;
-                            let newmsgdata = Box::new(MsgData {
-                                id: 0,
-                                data: vec![],
-                            });
-                            (self.msgdatacb)(mem::replace(&mut self.msgdata, newmsgdata));
-                            break;
-                        } else {
-                            //缓冲区已读完 buffer数据 还没有读完
-                            return Ok(EnumResult::BufferIsEmpty);
+                        if self.headpos == message::MSG_HEAD_SIZE {
+                            let msghead = self.decode_head();
+                            if msghead.id != self.id {
+                                return ReadResult::MsgIdError;
+                            }
+                            if msghead.datasize > self.maxsize {
+                                return ReadResult::MsgSizeTooBig;
+                            }
+                            self.id_increment();
+                            if msghead.datasize == 0 {
+                                //读完一个包
+                                self.headpos = 0;
+                                return ReadResult::Data(Box::new(MsgData {
+                                    id: msghead.dataid,
+                                    data: vec![],
+                                }));
+                            } else {
+                                //读完包头数据
+                                self.datapos = 0;
+                                self.msgdata = Box::new(MsgData {
+                                    id: msghead.dataid,
+                                    data: vec![0u8; msghead.datasize as usize],
+                                });
+                                break;
+                            }
                         }
+                        //缓冲区已读完 包头数据 还没有读完
+                        return ReadResult::BufferIsEmpty;
                     }
                     Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
                         info!("ErrorKind::WouldBlock");
                         //缓冲区已读完 包头数据 还没有读完
-                        return Ok(EnumResult::BufferIsEmpty);
+                        return ReadResult::BufferIsEmpty;
                     }
                     Err(ref err) if err.kind() == ErrorKind::Interrupted => {
                         info!("ErrorKind::Interrupted");
                         continue; ////系统中断 再read一次
                     }
-                    Err(err) => return Err(format!("{}", err)),
+                    Err(err) => return ReadResult::Error(format!("{}", err)),
                 }
+            }
+        }
+
+        loop {
+            //read msg data
+            match stream.read(&mut self.msgdata.data[self.datapos..]) {
+                Ok(0) => return ReadResult::ReadZeroSize,
+                Ok(size) => {
+                    //读取到的字节数
+                    self.datapos += size;
+                    if self.datapos < self.msgdata.data.capacity() {
+                        //tcp缓冲区已读完 数据还没有读完
+                        return ReadResult::BufferIsEmpty;
+                    }
+                    //读完一个包
+                    self.headpos = 0;
+                    let newmsgdata = Box::new(MsgData {
+                        id: 0,
+                        data: vec![],
+                    });
+                    return ReadResult::Data(mem::replace(&mut self.msgdata, newmsgdata));
+                }
+                Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
+                    info!("ErrorKind::WouldBlock");
+                    //缓冲区已读完 包头数据 还没有读完
+                    return ReadResult::BufferIsEmpty;
+                }
+                Err(ref err) if err.kind() == ErrorKind::Interrupted => {
+                    info!("ErrorKind::Interrupted");
+                    continue; ////系统中断 再read一次
+                }
+                Err(err) => return ReadResult::Error(format!("{}", err)),
             }
         }
     }

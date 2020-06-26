@@ -4,8 +4,12 @@ pub const MSG_MAX_ID: u16 = 4096;
 ///数据包头长度 6 个字节
 ///MsgHead(datasize:13~32位)+(id:1~12位) + dataid(16位)
 pub const MSG_HEAD_SIZE: usize = 6;
+
 ///数据最大字节数
 pub const MSG_MAX_SIZE: u32 = 1024 * 1024;
+
+///客户最大数量
+pub const CLIENT_MAX_NUM: u16 = u16::MAX;
 
 pub struct NetMsg {
     /// client id
