@@ -14,6 +14,11 @@ use std::thread;
 
 pub fn test() {
     client();
+    client();
+    client();
+    client();
+    client();
+    client();
 
     match server() {
         Ok(joinhandle) => joinhandle.join().unwrap(),
@@ -21,22 +26,22 @@ pub fn test() {
     }
 }
 
-fn write(client: &mut Client) {
+fn write(client: &mut Client) -> bool {
     loop {
         match client.tcp_writer.write(&mut client.stream) {
             WriteResult::Finish => {
-                info!("write result:{}", "Finish");
-                thread::sleep(std::time::Duration::from_secs(1));
-                break;
+                //info!("write result:{}", "Finish");
+                //thread::sleep(std::time::Duration::from_millis(1));
+                return true; //break;
             }
             WriteResult::BufferFull => {
                 error!("write result:{}", "BufferFull");
-                thread::sleep(std::time::Duration::from_millis(100));
+                thread::sleep(std::time::Duration::from_millis(10));
                 //break;
             }
             WriteResult::Error(err) => {
                 error!("write result error:{}", err);
-                break;
+                return false; //break;
             }
         }
     }
@@ -86,7 +91,7 @@ fn read(client: &mut Client) {
                 break;
                 //return ReadResult::MsgSizeTooBig;
             }
-            ReadResult::MsgPackIdError => {
+            ReadResult::MsgIdError => {
                 error!(
                     "read({:?}) MsgPackIdError",
                     client.stream.local_addr().unwrap()
@@ -118,37 +123,56 @@ fn client() -> thread::JoinHandle<()> {
         info!("client-->{:?}", std::thread::current().id());
         thread::sleep(std::time::Duration::from_secs(5));
 
+        let useName ="name";
+
         match TcpStream::connect("0.0.0.0:9988") {
             Ok(tcp_strem) => {
                 warn!("connect success:{:?}", tcp_strem.local_addr());
 
                 let mut client = Client::new(tcp_strem, 1024);
 
+                let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+
+                let buffer = str.as_bytes();
+
                 thread::sleep(std::time::Duration::from_secs(1));
-                let mut msg_num = 0;
+                let mut msg_num: u64 = 0;
+
+                let mut msg_len = 10;
+
                 loop {
-                    msg_num +=1;
-                    thread::sleep(std::time::Duration::from_secs(1));
+                    msg_num += 1;
+
+                    msg_len += 1;
+                    if msg_len == str.len() {
+                        msg_len = 10;
+                    }
+
+                    //thread::sleep(std::time::Duration::from_secs(1));
+                    /*
                     info!(
-                        "write new data start:{}--------------------------------------------------", msg_num
+                        "write new data start:{}---------------------------",
+                        msg_num
                     );
-                    let mut buffer = vec![0u8; "hello world".as_bytes().len()];
-                    utils::bytes::write_bytes(&mut buffer, "hello world".as_bytes());
-                    let msgdata = Box::new(MsgData {
-                        id: 1,
-                        data: buffer,
-                    });
+                    */
+                    let mut data: Vec<u8> = vec![0u8; msg_len];
+                    data.copy_from_slice(&buffer[0..msg_len]);
+
+                    let msgdata = Box::new(MsgData { id: 1, data: data });
 
                     if let Err(err) = client.tcp_writer.add_msgdata(msgdata) {
                         info!("add_msgdata result err:{}", err);
                     }
 
-                    write(&mut client);
-                    //read(&mut client);
+                    if write(&mut client) == false {
+                        break;
+                    }
 
-                    info!(
-                        "write new data end:{}--------------------------------------------------", msg_num
-                    );
+                    if msg_num % 10000000 == 0 {
+                        info!("write data:{}", msg_num);
+                    }
+
+                    //read(&mut client);
                 }
             }
 

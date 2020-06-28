@@ -13,9 +13,9 @@ pub struct TcpWriter {
     headpos: usize,
     datapos: usize,
     maxsize: usize,
-    headdata: [u8; message::MSG_HEAD_SIZE],
     deques: VecDeque<Box<MsgData>>,
     is_write_finish_current_data: bool,
+    headdata: [u8; message::MSG_HEAD_SIZE],
 }
 
 impl TcpWriter {
@@ -49,7 +49,7 @@ impl TcpWriter {
 
     #[inline]
     fn id_increment(&self) -> u16 {
-        if self.id > message::MSG_MAX_ID {
+        if self.id == message::MSG_MAX_ID {
             0
         } else {
             self.id + 1
@@ -63,10 +63,9 @@ impl TcpWriter {
                 self.is_write_finish_current_data = false;
 
                 let datasize = msgdata.data.len() as u32;
-                let datasizeid = datasize << 12 + self.id as u32;
+                let datasizeid = (datasize << 12) + self.id as u32;
                 bytes::write_u32(&mut self.headdata[0..], datasizeid);
                 bytes::write_u16(&mut self.headdata[4..], msgdata.id);
-
                 self.id = self.id_increment();
             }
 
@@ -115,6 +114,7 @@ impl TcpWriter {
                             self.datapos += size;
                             if self.datapos == msgdata.data.len() {
                                 self.headpos = 0;
+                                self.datapos = 0;
                                 //已写完当前buffer所有数据
                                 self.deques.pop_front();
                                 self.is_write_finish_current_data = true;

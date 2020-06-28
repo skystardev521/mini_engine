@@ -1,5 +1,5 @@
 //包ID最大值
-pub const MSG_MAX_ID: u16 = 4096;
+pub const MSG_MAX_ID: u16 = 4095;
 
 ///数据包头长度 6 个字节
 ///MsgHead(datasize:13~32位)+(id:1~12位) + dataid(16位)

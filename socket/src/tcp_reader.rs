@@ -21,7 +21,6 @@ pub struct TcpReader {
 
 impl TcpReader {
     /// maxsize：消息的最大字节1024 * 1024
-    /// msgdatacb：有新消息回调这个函数
     pub fn new(maxsize: u32) -> Box<Self> {
         Box::new(TcpReader {
             id: 0,
@@ -51,10 +50,11 @@ impl TcpReader {
     }
 
     #[inline]
-    fn id_increment(&mut self) {
-        self.id += 1;
-        if self.id > message::MSG_MAX_ID {
-            self.id = 0;
+    fn id_increment(&self) -> u16 {
+        if self.id == message::MSG_MAX_ID {
+            0
+        } else {
+            self.id + 1
         }
     }
 
@@ -74,7 +74,8 @@ impl TcpReader {
                             if msghead.datasize > self.maxsize {
                                 return ReadResult::MsgSizeTooBig;
                             }
-                            self.id_increment();
+                            self.id = self.id_increment();
+
                             if msghead.datasize == 0 {
                                 //读完一个包
                                 self.headpos = 0;
@@ -84,7 +85,6 @@ impl TcpReader {
                                 }));
                             } else {
                                 //读完包头数据
-                                self.datapos = 0;
                                 self.msgdata = Box::new(MsgData {
                                     id: msghead.dataid,
                                     data: vec![0u8; msghead.datasize as usize],
@@ -96,12 +96,10 @@ impl TcpReader {
                         return ReadResult::BufferIsEmpty;
                     }
                     Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
-                        info!("ErrorKind::WouldBlock");
                         //缓冲区已读完 包头数据 还没有读完
                         return ReadResult::BufferIsEmpty;
                     }
                     Err(ref err) if err.kind() == ErrorKind::Interrupted => {
-                        info!("ErrorKind::Interrupted");
                         continue; ////系统中断 再read一次
                     }
                     Err(err) => return ReadResult::Error(format!("{}", err)),
@@ -122,6 +120,7 @@ impl TcpReader {
                     }
                     //读完一个包
                     self.headpos = 0;
+                    self.datapos = 0;
                     let newmsgdata = Box::new(MsgData {
                         id: 0,
                         data: vec![],
@@ -129,12 +128,12 @@ impl TcpReader {
                     return ReadResult::Data(mem::replace(&mut self.msgdata, newmsgdata));
                 }
                 Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
-                    info!("ErrorKind::WouldBlock");
+                    //info!("ErrorKind::WouldBlock");
                     //缓冲区已读完 包头数据 还没有读完
                     return ReadResult::BufferIsEmpty;
                 }
                 Err(ref err) if err.kind() == ErrorKind::Interrupted => {
-                    info!("ErrorKind::Interrupted");
+                    //info!("ErrorKind::Interrupted");
                     continue; ////系统中断 再read一次
                 }
                 Err(err) => return ReadResult::Error(format!("{}", err)),
