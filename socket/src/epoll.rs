@@ -1,11 +1,19 @@
 use libc;
+use std::net::SocketAddr;
+use std::net::TcpStream;
 use std::os::unix::io::RawFd;
-
-use utils::ffi_ext;
+use utils::capi;
 
 #[derive(Debug)]
 pub struct Epoll {
     fd: libc::c_int,
+}
+
+pub trait EpollEvent {
+    fn read(&mut self, id: u64);
+    fn write(&mut self, id: u64);
+    fn error(&mut self, id: u64, err: String);
+    fn accept(&mut self, stream: TcpStream, addr: SocketAddr);
 }
 
 impl Drop for Epoll {
@@ -25,7 +33,7 @@ impl Epoll {
                 epoll.fd = fd;
                 return Ok(epoll);
             } else {
-                return Err(ffi_ext::c_strerr());
+                return Err(capi::c_strerr());
             }
         }
     }
@@ -41,7 +49,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(ffi_ext::c_strerr());
+            return Err(capi::c_strerr());
         }
     }
     #[inline]
@@ -55,7 +63,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(ffi_ext::c_strerr());
+            return Err(capi::c_strerr());
         }
     }
     #[inline]
@@ -70,7 +78,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(ffi_ext::c_strerr());
+            return Err(capi::c_strerr());
         }
     }
     #[inline]
@@ -83,7 +91,7 @@ impl Epoll {
             if libc::EINTR == *libc::__errno_location() {
                 return Ok(0);
             }
-            return Err(ffi_ext::c_strerr());
+            return Err(capi::c_strerr());
         }
     }
 }

@@ -2,31 +2,33 @@ use crate::clients::Clients;
 use crate::clients::ReadResult;
 use crate::clients::WriteResult;
 use crate::epoll::Epoll;
+use crate::epoll::EpollEvent;
 use crate::message::MsgData;
 use libc;
 use log::{error, info};
-use std::io::Error;
 use std::net::Shutdown;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 
-pub struct EpEvent<'a> {
+pub struct TcpEvent<'a> {
     num: u64,
     epoll: &'a Epoll,
     clients: &'a mut Clients<'a>,
 }
 
-impl<'a> EpEvent<'a> {
+impl<'a> TcpEvent<'a> {
     pub fn new(epoll: &'a Epoll, clients: &'a mut Clients<'a>) -> Self {
-        EpEvent {
+        TcpEvent {
             num: 0,
             epoll: epoll,
             clients: clients,
         }
     }
+}
 
-    pub fn read(&mut self, id: u64) {
+impl<'a> EpollEvent for TcpEvent<'a> {
+    fn read(&mut self, id: u64) {
         //info!("tcp_event.read({})", id);
 
         if let Some(client) = self.clients.get_mut_client(id) {
@@ -34,7 +36,7 @@ impl<'a> EpEvent<'a> {
                 match client.tcp_reader.read(&mut client.stream) {
                     ReadResult::Data(msgdata) => {
                         self.num += 1;
-                        if self.num % 10000000 == 0{
+                        if self.num % 10000000 == 0 {
                             info!("read data:{}", self.num);
                         }
                         /*
@@ -84,7 +86,7 @@ impl<'a> EpEvent<'a> {
         }
     }
 
-    pub fn write(&mut self, id: u64) {
+    fn write(&mut self, id: u64) {
         info!("tcp_event.write({})", id);
         if let Some(client) = self.clients.get_mut_client(id) {
             match client.tcp_writer.write(&mut client.stream) {
@@ -106,7 +108,7 @@ impl<'a> EpEvent<'a> {
         }
     }
 
-    pub fn error(&mut self, id: u64, err: Error) {
+    fn error(&mut self, id: u64, err: String) {
         info!("error error:{}", err);
 
         match self.clients.del_client(id) {
@@ -115,7 +117,7 @@ impl<'a> EpEvent<'a> {
         }
     }
 
-    pub fn accept(&mut self, stream: TcpStream, addr: SocketAddr) {
+    fn accept(&mut self, stream: TcpStream, addr: SocketAddr) {
         match stream.set_nonblocking(true) {
             Ok(()) => {
                 info!("new TcpStream:{}", addr);

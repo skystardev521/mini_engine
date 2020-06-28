@@ -13,6 +13,12 @@ pub struct ThreadPool {
 }
 use log::{error, info};
 
+//struct TestEvent;
+
+pub trait TestEvent {
+    fn test_event(&mut self);
+}
+
 fn main() {
     match logger::Logger::init(&String::from("info"), &String::from("logs/test_log.log"), 1) {
         Ok(()) => (),

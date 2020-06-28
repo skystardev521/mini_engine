@@ -1,18 +1,27 @@
-use crate::epevent::EpEvent;
 use crate::epoll::Epoll;
+use crate::epoll::EpollEvent;
 use libc;
-use std::io::{Error, ErrorKind};
+use std::io::ErrorKind;
 use std::net::TcpListener;
 use std::os::unix::io::AsRawFd;
-use utils::ffi_ext;
+use utils::capi;
 
 const LISTEN_ID: u64 = 0;
 const MIN_EVENT: u16 = 8;
 
+/*
 pub struct TcpListen<'a> {
     epoll: &'a Epoll,
     listen: TcpListener,
     epevent: &'a mut EpEvent<'a>,
+    epevents: Vec<libc::epoll_event>,
+}
+*/
+
+pub struct TcpListen<'a> {
+    epoll: &'a Epoll,
+    listen: TcpListener,
+    epevent: &'a mut dyn EpollEvent,
     epevents: Vec<libc::epoll_event>,
 }
 
@@ -21,7 +30,7 @@ impl<'a> TcpListen<'a> {
         addr: &String,
         maxevents: u16,
         epoll: &'a Epoll,
-        epevent: &'a mut EpEvent<'a>,
+        epevent: &'a mut dyn EpollEvent,
     ) -> Result<Self, String> {
         let mut max_events = maxevents;
         if max_events < MIN_EVENT {
@@ -37,7 +46,7 @@ impl<'a> TcpListen<'a> {
             Err(err) => return Err(format!("{}", err)),
         }
 
-        match ffi_ext::setsockopt(listen.as_raw_fd(), libc::SO_REUSEADDR, 1) {
+        match capi::setsockopt(listen.as_raw_fd(), libc::SO_REUSEADDR, 1) {
             Ok(()) => (),
             Err(err) => return Err(err),
         }
@@ -76,7 +85,7 @@ impl<'a> TcpListen<'a> {
                         self.epevent.write(event.u64);
                     }
                     if (event.events & libc::EPOLLERR as u32) != 0 {
-                        self.epevent.error(event.u64, Error::last_os_error());
+                        self.epevent.error(event.u64, capi::c_strerr());
                     }
                     //if event.events & libc::EPOLLHUP {}  | libc::EPOLLHUP
                 }
@@ -86,6 +95,7 @@ impl<'a> TcpListen<'a> {
         }
     }
 
+    #[inline]
     fn loop_accept(&mut self) -> Result<(), String> {
         loop {
             match self.listen.accept() {

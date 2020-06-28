@@ -1,5 +1,5 @@
 pub mod bytes;
-pub mod ffi_ext;
+pub mod capi;
 pub mod logger;
 pub mod time;
 

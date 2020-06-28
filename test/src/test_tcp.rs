@@ -4,9 +4,9 @@ use socket::clients::Client;
 use socket::clients::Clients;
 use socket::clients::ReadResult;
 use socket::clients::WriteResult;
-use socket::epevent::EpEvent;
 use socket::epoll::Epoll;
 use socket::message::MsgData;
+use socket::tcp_event::TcpEvent;
 use socket::tcp_listen::TcpListen;
 use std::net::Shutdown;
 use std::net::TcpStream;
@@ -123,8 +123,6 @@ fn client() -> thread::JoinHandle<()> {
         info!("client-->{:?}", std::thread::current().id());
         thread::sleep(std::time::Duration::from_secs(5));
 
-        let useName ="name";
-
         match TcpStream::connect("0.0.0.0:9988") {
             Ok(tcp_strem) => {
                 warn!("connect success:{:?}", tcp_strem.local_addr());
@@ -196,7 +194,7 @@ fn server() -> Result<thread::JoinHandle<()>, String> {
 
             info!("server-->{:?}", thread::current().id());
 
-            let mut epevent = EpEvent::new(&epoll, &mut clients);
+            let mut epevent = TcpEvent::new(&epoll, &mut clients);
             match TcpListen::new(&String::from("0.0.0.0:9988"), 99, &epoll, &mut epevent) {
                 Ok(mut listen) => loop {
                     match listen.run(1000) {
