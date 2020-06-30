@@ -1,3 +1,4 @@
+/*
 use log::{error, info, warn};
 use socket::clients;
 use socket::clients::Client;
@@ -11,8 +12,9 @@ use socket::tcp_listen::TcpListen;
 use std::net::Shutdown;
 use std::net::TcpStream;
 use std::thread;
-
+*/
 pub fn test() {
+    /*
     client();
     client();
     client();
@@ -23,9 +25,10 @@ pub fn test() {
     match server() {
         Ok(joinhandle) => joinhandle.join().unwrap(),
         Err(err) => error!("{}", err),
-    }
+    }]
+    */
 }
-
+/*
 fn write(client: &mut Client) -> bool {
     loop {
         match client.tcp_writer.write(&mut client.stream) {
@@ -50,14 +53,14 @@ fn write(client: &mut Client) -> bool {
 fn read(client: &mut Client) {
     loop {
         match client.tcp_reader.read(&mut client.stream) {
-            ReadResult::Data(msgdata) => {
+            ReadResult::Data(msg_data) => {
                 info!(
                     "id:{} data:{:?}",
-                    &msgdata.id,
-                    String::from_utf8_lossy(&msgdata.data).to_string()
+                    &msg_data.id,
+                    String::from_utf8_lossy(&msg_data.data).to_string()
                 );
                 break;
-                //return ReadResult::Data(msgdata);
+                //return ReadResult::Data(msg_data);
             }
 
             ReadResult::BufferIsEmpty => {
@@ -156,10 +159,10 @@ fn client() -> thread::JoinHandle<()> {
                     let mut data: Vec<u8> = vec![0u8; msg_len];
                     data.copy_from_slice(&buffer[0..msg_len]);
 
-                    let msgdata = Box::new(MsgData { id: 1, data: data });
+                    let msg_data = Box::new(MsgData { id: 1, data: data });
 
-                    if let Err(err) = client.tcp_writer.add_msgdata(msgdata) {
-                        info!("add_msgdata result err:{}", err);
+                    if let Err(err) = client.tcp_writer.add_msg_data(msg_data) {
+                        info!("add_msg_data result err:{}", err);
                     }
 
                     if write(&mut client) == false {
@@ -197,7 +200,7 @@ fn server() -> Result<thread::JoinHandle<()>, String> {
             let mut epevent = TcpEvent::new(&epoll, &mut clients);
             match TcpListen::new(&String::from("0.0.0.0:9988"), 99, &epoll, &mut epevent) {
                 Ok(mut listen) => loop {
-                    match listen.run(1000) {
+                    match listen.run(1) {
                         Ok(()) => (),
                         Err(err) => error!("{}", err),
                     }
@@ -215,3 +218,4 @@ fn server() -> Result<thread::JoinHandle<()>, String> {
 
     Ok(server)
 }
+*/

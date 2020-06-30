@@ -10,83 +10,83 @@ use utils::bytes;
 
 pub struct TcpWriter {
     id: u16,
-    headpos: usize,
-    datapos: usize,
-    maxsize: usize,
-    deques: VecDeque<Box<MsgData>>,
+    head_pos: usize,
+    data_pos: usize,
+    max_size: usize,
+    vec_deque: VecDeque<Box<MsgData>>,
     is_write_finish_current_data: bool,
-    headdata: [u8; message::MSG_HEAD_SIZE],
+    head_data: [u8; message::MSG_HEAD_SIZE],
 }
 
 impl TcpWriter {
-    pub fn new(maxsize: u32) -> Box<Self> {
+    pub fn new(max_size: u32) -> Box<Self> {
         Box::new(TcpWriter {
             id: 0,
-            headpos: 0,
-            datapos: 0,
-            deques: VecDeque::new(),
-            headdata: [0u8; message::MSG_HEAD_SIZE],
+            head_pos: 0,
+            data_pos: 0,
+            vec_deque: VecDeque::new(),
             is_write_finish_current_data: true,
-            maxsize: if maxsize > message::MSG_MAX_SIZE {
+            head_data: [0u8; message::MSG_HEAD_SIZE],
+            max_size: if max_size > message::MSG_MAX_SIZE {
                 message::MSG_MAX_SIZE
             } else {
-                maxsize
+                max_size
             } as usize,
         })
     }
 
-    pub fn get_msgdata_count(&self) -> u32 {
-        self.deques.len() as u32
+    pub fn get_msg_data_count(&self) -> u32 {
+        self.vec_deque.len() as u32
     }
 
-    pub fn add_msgdata(&mut self, msgdata: Box<MsgData>) -> Result<(), String> {
-        if msgdata.data.len() <= self.maxsize {
-            Ok(self.deques.push_back(msgdata))
+    pub fn add_msg_data(&mut self, msg_data: Box<MsgData>) -> Result<(), String> {
+        if msg_data.data.len() <= self.max_size {
+            Ok(self.vec_deque.push_back(msg_data))
         } else {
             Err(String::from("MsgSizeTooBig"))
         }
     }
 
-    #[inline]
-    fn id_increment(&self) -> u16 {
-        if self.id == message::MSG_MAX_ID {
-            0
-        } else {
-            self.id + 1
-        }
-    }
-
     pub fn write(&mut self, stream: &mut TcpStream) -> WriteResult {
-        'go_while: while let Some(msgdata) = self.deques.front() {
+        'go_while: while let Some(msg_data) = self.vec_deque.front() {
             //create head data
             if self.is_write_finish_current_data {
                 self.is_write_finish_current_data = false;
+                //------------------encode head data start-----------------------------
+                let data_size = msg_data.data.len() as u32;
+                let size_and_id = (data_size << 12) + self.id as u32;
+                bytes::write_u32(&mut self.head_data[..], size_and_id);
+                bytes::write_u16(
+                    &mut self.head_data[message::HEAD_DATA_ID_POS..],
+                    msg_data.id,
+                );
+                //------------------encode head data end-----------------------------
 
-                let datasize = msgdata.data.len() as u32;
-                let datasizeid = (datasize << 12) + self.id as u32;
-                bytes::write_u32(&mut self.headdata[0..], datasizeid);
-                bytes::write_u16(&mut self.headdata[4..], msgdata.id);
-                self.id = self.id_increment();
+                if self.id == message::MSG_MAX_ID {
+                    self.id = 0
+                } else {
+                    self.id += 1;
+                }
             }
 
             // write head data
-            if self.headpos < message::MSG_HEAD_SIZE {
+            if self.head_pos < message::MSG_HEAD_SIZE {
                 loop {
-                    match stream.write(&self.headdata[self.headpos..]) {
+                    match stream.write(&self.head_data[self.head_pos..]) {
                         Ok(0) => {
                             //已写满缓冲区 不能再写到缓存区
                             return WriteResult::BufferFull;
                         }
                         Ok(size) => {
-                            self.headpos += size;
-                            if self.headpos == message::MSG_HEAD_SIZE {
-                                //已写完 headdata
-                                if msgdata.data.len() > 0 {
+                            self.head_pos += size;
+                            if self.head_pos == message::MSG_HEAD_SIZE {
+                                //已写完 head_data
+                                if msg_data.data.len() > 0 {
                                     break;
                                 } else {
-                                    self.headpos = 0;
+                                    self.head_pos = 0;
                                     //当前buffer没有数据
-                                    self.deques.pop_front();
+                                    self.vec_deque.pop_front();
                                     self.is_write_finish_current_data = true;
                                     break 'go_while;
                                 }
@@ -103,20 +103,20 @@ impl TcpWriter {
                 }
             }
             //write buffer data
-            if self.datapos < msgdata.data.len() {
+            if self.data_pos < msg_data.data.len() {
                 loop {
-                    match stream.write(&msgdata.data[self.datapos..]) {
+                    match stream.write(&msg_data.data[self.data_pos..]) {
                         Ok(0) => {
                             //已写满缓冲区 不能再写到缓存区
                             return WriteResult::BufferFull;
                         }
                         Ok(size) => {
-                            self.datapos += size;
-                            if self.datapos == msgdata.data.len() {
-                                self.headpos = 0;
-                                self.datapos = 0;
+                            self.data_pos += size;
+                            if self.data_pos == msg_data.data.len() {
+                                self.head_pos = 0;
+                                self.data_pos = 0;
                                 //已写完当前buffer所有数据
-                                self.deques.pop_front();
+                                self.vec_deque.pop_front();
                                 self.is_write_finish_current_data = true;
                                 break 'go_while; //已写完
                             } else {

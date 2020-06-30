@@ -3,21 +3,12 @@ use std::ffi::CStr;
 use std::mem;
 use std::os::unix::io::RawFd;
 
-/*
 #[inline]
-pub fn strerror() -> &'static str {
-    unsafe {
-        let str_err = libc::strerror(*libc::__errno_location());
-        if str_err.is_null() {
-            return "";
-        }
-        match CStr::from_ptr(str_err).to_str() {
-            Ok(result) => result,
-            Err(_e) => "libc::strerror to_str error",
-        }
-    }
+///total(v1 + v2 + v3)
+///value(1,2,4,8,16,32,64,128)
+pub fn bit_match(total: u8, val: u8) -> bool {
+    (total & val) == val
 }
-*/
 
 #[inline]
 pub fn c_strerr() -> String {

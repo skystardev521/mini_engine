@@ -45,14 +45,14 @@ pub struct Client {
 
 pub struct Clients<'a> {
     last_id: u64,
-    epoll: &'a Epoll,
     max_size: u32,
+    epoll: &'a Epoll,
     hash_map: Box<HashMap<u64, Client>>,
 }
 
 impl<'a> Clients<'a> {
     /// max client
-    /// max_size: net data max size
+    /// max_size: data max size
     pub fn new(max_client: u16, max_size: u32, epoll: &'a Epoll) -> NewClientsResult {
         if max_client < 8 {
             return NewClientsResult::ClientNumTooSmall;
@@ -78,10 +78,8 @@ impl<'a> Clients<'a> {
         if self.hash_map.len() == self.hash_map.capacity() {
             return NewClientResult::MaxClientCount;
         }
-
         loop {
             self.last_id += 1;
-            //tcp_listen id = 0
             if self.last_id == 0 {
                 self.last_id = 1;
             }

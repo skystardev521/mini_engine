@@ -13,10 +13,8 @@ pub struct ThreadPool {
 }
 use log::{error, info};
 
-//struct TestEvent;
-
-pub trait TestEvent {
-    fn test_event(&mut self);
+pub struct st {
+    i: u16,
 }
 
 fn main() {
@@ -53,12 +51,31 @@ fn main() {
     println!("TestEnum:{:?}", TestEnum::Err);
 
     let mut hm: std::collections::HashMap<&str, i32> = std::collections::HashMap::new();
+
+    let mut t = st { i: 0 };
     let mut f_mut = || -> u16 {
         hm.insert("key", 999);
+        t.i += 1;
         9999
     };
+
+    let mut t = st { i: 0 };
+    let mut f_mut1 = |i: u16| -> u16 {
+        //hm.insert("key", 999);
+        9999 + i + t.i;
+        t.i += 1;
+        222
+    };
+
     fn_mut_closure(&mut f_mut);
     fn_mut_closure_1(&mut f_mut);
+
+    fn_mut_closure_2(&mut f_mut1);
+
+    fn_mut_closure(&mut || -> u16 {
+        hm.insert("key", 999);
+        return 9999;
+    });
 
     let f = || -> u16 { 9999 };
 
@@ -94,6 +111,14 @@ where
 {
     f();
 }
+
+fn fn_mut_closure_2<F>(f: &mut F)
+where
+    F: FnMut(u16) -> u16,
+{
+    f(1);
+}
+
 fn fn_closure(f: &dyn Fn() -> u16) {
     f();
 }

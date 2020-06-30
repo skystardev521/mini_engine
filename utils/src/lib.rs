@@ -1,6 +1,6 @@
 pub mod bytes;
-pub mod capi;
 pub mod logger;
+pub mod native;
 pub mod time;
 
 #[cfg(test)]

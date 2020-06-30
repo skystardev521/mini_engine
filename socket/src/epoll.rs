@@ -2,7 +2,7 @@ use libc;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::os::unix::io::RawFd;
-use utils::capi;
+use utils::native;
 
 #[derive(Debug)]
 pub struct Epoll {
@@ -33,7 +33,7 @@ impl Epoll {
                 epoll.fd = fd;
                 return Ok(epoll);
             } else {
-                return Err(capi::c_strerr());
+                return Err(native::c_strerr());
             }
         }
     }
@@ -49,7 +49,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(capi::c_strerr());
+            return Err(native::c_strerr());
         }
     }
     #[inline]
@@ -63,7 +63,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(capi::c_strerr());
+            return Err(native::c_strerr());
         }
     }
     #[inline]
@@ -78,7 +78,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(capi::c_strerr());
+            return Err(native::c_strerr());
         }
     }
     #[inline]
@@ -91,7 +91,7 @@ impl Epoll {
             if libc::EINTR == *libc::__errno_location() {
                 return Ok(0);
             }
-            return Err(capi::c_strerr());
+            return Err(native::c_strerr());
         }
     }
 }

@@ -3,52 +3,52 @@ use crate::clients::ReadResult;
 use crate::clients::WriteResult;
 use crate::epoll::Epoll;
 use crate::epoll::EpollEvent;
-use crate::message::MsgData;
-use libc;
-use log::{error, info};
+use crate::message::NetMsg;
+use log::error;
 use std::net::Shutdown;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 
-pub struct TcpEvent<'a> {
-    num: u64,
+pub struct TcpEvent<'a, 'b> {
     epoll: &'a Epoll,
-    clients: &'a mut Clients<'a>,
+    clients: &'b mut Clients<'b>,
+    net_msg_cb: &'b mut FnMut(NetMsg),
 }
 
-impl<'a> TcpEvent<'a> {
-    pub fn new(epoll: &'a Epoll, clients: &'a mut Clients<'a>) -> Self {
+impl<'a, 'b> TcpEvent<'a, 'b> {
+    pub fn new(
+        epoll: &'a Epoll,
+        clients: &'b mut Clients<'b>,
+        msg_data_cb: &'b mut FnMut(NetMsg),
+    ) -> Self {
         TcpEvent {
-            num: 0,
             epoll: epoll,
             clients: clients,
+            net_msg_cb: msg_data_cb,
         }
     }
 }
 
-impl<'a> EpollEvent for TcpEvent<'a> {
+impl<'a, 'b> EpollEvent for TcpEvent<'a, 'b> {
     fn read(&mut self, id: u64) {
-        //info!("tcp_event.read({})", id);
-
         if let Some(client) = self.clients.get_mut_client(id) {
             loop {
                 match client.tcp_reader.read(&mut client.stream) {
-                    ReadResult::Data(msgdata) => {
+                    ReadResult::Data(msg_data) => {
+                        (self.net_msg_cb)(NetMsg {
+                            id: id,
+                            data: msg_data,
+                        });
+                        /*
                         self.num += 1;
                         if self.num % 10000000 == 0 {
-                            info!("read data:{}", self.num);
+                            error!("read data:{}", self.num);
                         }
-                        /*
-                        info!(
-                            "id:{} data:{:?}",
-                            &msgdata.id,
-                            String::from_utf8_lossy(&msgdata.data).to_string()
-                        );
+
                         */
                     }
                     ReadResult::BufferIsEmpty => {
-                        //error!("read({}) BufferIsEmpty", id);
                         break;
                     }
                     ReadResult::ReadZeroSize => {
@@ -87,12 +87,10 @@ impl<'a> EpollEvent for TcpEvent<'a> {
     }
 
     fn write(&mut self, id: u64) {
-        info!("tcp_event.write({})", id);
         if let Some(client) = self.clients.get_mut_client(id) {
             match client.tcp_writer.write(&mut client.stream) {
-                WriteResult::Finish => info!("write result:{}", "Finish"),
+                WriteResult::Finish => (),
                 WriteResult::BufferFull => {
-                    error!("write result:{}", "BufferFull");
                     if let Err(err) = self.epoll.ctl_mod_fd(
                         id,
                         client.stream.as_raw_fd(),
@@ -101,7 +99,12 @@ impl<'a> EpollEvent for TcpEvent<'a> {
                         error!("write ctl_mod_fd err:{}", err);
                     }
                 }
-                WriteResult::Error(err) => error!("write result error:{}", err),
+                WriteResult::Error(err) => {
+                    error!("write result error:{}", err);
+                    if let Err(err) = self.clients.del_client(id) {
+                        error!("clients.del_client({}) Error:{}", id, err);
+                    }
+                }
             }
         } else {
             error!("client Id:{} Not exists", &id)
@@ -109,23 +112,20 @@ impl<'a> EpollEvent for TcpEvent<'a> {
     }
 
     fn error(&mut self, id: u64, err: String) {
-        info!("error error:{}", err);
-
+        error!("error error:{}", err);
         match self.clients.del_client(id) {
             Ok(()) => (),
             Err(err) => error!("{}", err),
         }
     }
 
-    fn accept(&mut self, stream: TcpStream, addr: SocketAddr) {
+    fn accept(&mut self, stream: TcpStream, _addr: SocketAddr) {
         match stream.set_nonblocking(true) {
             Ok(()) => {
-                info!("new TcpStream:{}", addr);
                 self.clients.new_client(stream);
             }
             Err(err) => {
-                info!("new TcpStream:{}", addr);
-                info!("set_nonblocking:{}", err);
+                error!("set_nonblocking:{}", err);
                 match stream.shutdown(Shutdown::Both) {
                     Ok(()) => (),
                     Err(err) => error!("shutdown:{}", err),
