@@ -1,20 +1,10 @@
-use std::thread;
+//use std::thread;
 use utils::logger;
-use utils::time;
+//use utils::time;
 pub mod test_tcp;
 
-#[derive(Debug)]
-enum TestEnum {
-    Ok,
-    Err,
-}
 pub struct ThreadPool {
-    handlers: Vec<thread::JoinHandle<()>>,
-}
-use log::{error, info};
-
-pub struct st {
-    i: u16,
+    //handlers: Vec<thread::JoinHandle<()>>,
 }
 
 fn main() {
@@ -37,40 +27,16 @@ fn main() {
             }));
         }
     */
-    let (tx, rx) = std::sync::mpsc::channel();
-
-    let child_thread = std::thread::spawn(move || {
-        tx.send(TestEnum::Err).unwrap();
-    });
-
-    child_thread.join().unwrap();
-
-    let received = rx.recv().unwrap();
-    println!("Got: {:?}", received);
-
-    println!("TestEnum:{:?}", TestEnum::Err);
 
     let mut hm: std::collections::HashMap<&str, i32> = std::collections::HashMap::new();
 
-    let mut t = st { i: 0 };
     let mut f_mut = || -> u16 {
         hm.insert("key", 999);
-        t.i += 1;
         9999
-    };
-
-    let mut t = st { i: 0 };
-    let mut f_mut1 = |i: u16| -> u16 {
-        //hm.insert("key", 999);
-        9999 + i + t.i;
-        t.i += 1;
-        222
     };
 
     fn_mut_closure(&mut f_mut);
     fn_mut_closure_1(&mut f_mut);
-
-    fn_mut_closure_2(&mut f_mut1);
 
     fn_mut_closure(&mut || -> u16 {
         hm.insert("key", 999);
@@ -111,14 +77,14 @@ where
 {
     f();
 }
-
+/*
 fn fn_mut_closure_2<F>(f: &mut F)
 where
     F: FnMut(u16) -> u16,
 {
     f(1);
 }
-
+*/
 fn fn_closure(f: &dyn Fn() -> u16) {
     f();
 }

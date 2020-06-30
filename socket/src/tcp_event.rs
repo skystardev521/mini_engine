@@ -10,17 +10,17 @@ use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 
-pub struct TcpEvent<'a, 'b> {
+pub struct TcpEvent<'a, 'b, 'c> {
     epoll: &'a Epoll,
     clients: &'b mut Clients<'b>,
-    net_msg_cb: &'b mut FnMut(NetMsg),
+    net_msg_cb: &'c mut dyn Fn(NetMsg),
 }
 
-impl<'a, 'b> TcpEvent<'a, 'b> {
+impl<'a, 'b, 'c> TcpEvent<'a, 'b, 'c> {
     pub fn new(
         epoll: &'a Epoll,
         clients: &'b mut Clients<'b>,
-        msg_data_cb: &'b mut FnMut(NetMsg),
+        msg_data_cb: &'c mut dyn Fn(NetMsg),
     ) -> Self {
         TcpEvent {
             epoll: epoll,
@@ -30,7 +30,7 @@ impl<'a, 'b> TcpEvent<'a, 'b> {
     }
 }
 
-impl<'a, 'b> EpollEvent for TcpEvent<'a, 'b> {
+impl<'a, 'b, 'c> EpollEvent for TcpEvent<'a, 'b, 'c> {
     fn read(&mut self, id: u64) {
         if let Some(client) = self.clients.get_mut_client(id) {
             loop {
@@ -40,13 +40,6 @@ impl<'a, 'b> EpollEvent for TcpEvent<'a, 'b> {
                             id: id,
                             data: msg_data,
                         });
-                        /*
-                        self.num += 1;
-                        if self.num % 10000000 == 0 {
-                            error!("read data:{}", self.num);
-                        }
-
-                        */
                     }
                     ReadResult::BufferIsEmpty => {
                         break;
