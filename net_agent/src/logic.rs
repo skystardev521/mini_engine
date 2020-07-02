@@ -1,3 +1,4 @@
+/*
 use socket::message::NetMsg;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
@@ -25,3 +26,5 @@ impl<'a, T> Logic<'a, T> {
         Ok(())
     }
 }
+
+*/

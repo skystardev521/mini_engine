@@ -2,8 +2,9 @@
 
 members = [
   "test",
-  "engine",
-  "socket",
   "utils",
-  "mysql"
+  "mysql",
+  "socket",
+  "net_agent",
+  "net_server",
 ]

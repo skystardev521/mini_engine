@@ -9,23 +9,9 @@ use std::collections::HashMap;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 
-pub enum NewClientsResult<'a> {
-    MsgSizeTooBig,
-    ClientNumTooSmall,
-    Ok(Clients<'a>),
-}
-
-pub enum NewClientResult {
-    NewClientSucc,
-    MaxClientCount,
-    EpollCtlAddFdErr(String),
-}
-
 pub enum ReadResult {
-    MsgIdError,
     Error(String),
     ReadZeroSize,
-    MsgSizeTooBig,
     BufferIsEmpty,
     Data(Box<MsgData>),
 }
@@ -47,26 +33,27 @@ pub struct Clients<'a> {
     last_id: u64,
     max_size: u32,
     epoll: &'a Epoll,
-    hash_map: Box<HashMap<u64, Client>>,
+    hash_map: HashMap<u64, Client>,
 }
 
 impl<'a> Clients<'a> {
     /// max client
     /// max_size: data max size
-    pub fn new(max_client: u16, max_size: u32, epoll: &'a Epoll) -> NewClientsResult {
+    pub fn new(max_client: u16, max_size: u32, epoll: &'a Epoll) -> Result<Self, String> {
         if max_client < 8 {
-            return NewClientsResult::ClientNumTooSmall;
+            return Err("ClientNumTooSmall".into());
         }
 
         if max_size > message::MSG_MAX_SIZE {
-            return NewClientsResult::MsgSizeTooBig;
+            return Err("MsgSizeTooBig".into());
         }
 
-        NewClientsResult::Ok(Clients {
-            last_id: 0,
+        Ok(Clients {
             epoll: epoll,
             max_size: max_size,
-            hash_map: Box::new(HashMap::with_capacity(max_client as usize)),
+            //epoll_event: epoll_event,
+            last_id: 0,
+            hash_map: HashMap::with_capacity(max_client as usize),
         })
     }
 
@@ -74,16 +61,16 @@ impl<'a> Clients<'a> {
         self.hash_map.len() as u32
     }
 
-    pub fn new_client(&mut self, stream: TcpStream) -> NewClientResult {
+    pub fn new_client(&mut self, stream: TcpStream) -> Result<(), String> {
         if self.hash_map.len() == self.hash_map.capacity() {
-            return NewClientResult::MaxClientCount;
+            return Err("MaxClientCount".into());
         }
         loop {
             self.last_id += 1;
             if self.last_id == 0 {
                 self.last_id = 1;
             }
-            if !self.hash_map.contains_key(&self.last_id) {
+            if self.hash_map.contains_key(&self.last_id) == false {
                 break;
             }
         }
@@ -92,12 +79,12 @@ impl<'a> Clients<'a> {
             .epoll
             .ctl_add_fd(self.last_id, stream.as_raw_fd(), libc::EPOLLIN)
         {
-            return NewClientResult::EpollCtlAddFdErr(err);
+            return Err(err);
         }
 
         self.hash_map
             .insert(self.last_id, Client::new(stream, self.max_size));
-        NewClientResult::NewClientSucc
+        Ok(())
     }
 
     pub fn del_client(&mut self, id: u64) -> Result<(), String> {
@@ -112,11 +99,7 @@ impl<'a> Clients<'a> {
         }
     }
 
-    pub fn get_client(&self, id: u64) -> Option<&Client> {
-        self.hash_map.get(&id)
-    }
-
-    pub fn get_mut_client(&mut self, id: u64) -> Option<&mut Client> {
+    pub fn get_client(&mut self, id: u64) -> Option<&mut Client> {
         self.hash_map.get_mut(&id)
     }
 }

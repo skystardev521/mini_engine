@@ -3,6 +3,8 @@ use utils::logger;
 //use utils::time;
 pub mod test_tcp;
 
+use engine::engine::Engine;
+
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,
 }
@@ -13,7 +15,11 @@ fn main() {
         Err(err) => println!("Logger::init error:{}", err),
     }
 
-    test_tcp::test();
+    //test_tcp::test();
+
+    let engine = Engine::new();
+
+    engine.run();
 
     /*
         let mut thread_pool: Vec<thread::JoinHandle<()>> = vec![];
@@ -39,7 +45,7 @@ fn main() {
     fn_mut_closure_1(&mut f_mut);
 
     fn_mut_closure(&mut || -> u16 {
-        hm.insert("key", 999);
+        //hm.insert("key", 999);
         return 9999;
     });
 

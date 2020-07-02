@@ -5,69 +5,60 @@ use crate::epoll::Epoll;
 use crate::epoll::EpollEvent;
 use crate::message::NetMsg;
 use log::error;
+use std::cell::RefCell;
 use std::net::Shutdown;
-use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 
 pub struct TcpEvent<'a, 'b, 'c> {
     epoll: &'a Epoll,
     clients: &'b mut Clients<'b>,
-    net_msg_cb: &'c mut dyn Fn(NetMsg),
+    //clients: &'b RefCell<Clients<'b>>,
+    net_msg_cb: &'c mut dyn FnMut(NetMsg) -> bool,
 }
 
 impl<'a, 'b, 'c> TcpEvent<'a, 'b, 'c> {
     pub fn new(
         epoll: &'a Epoll,
         clients: &'b mut Clients<'b>,
-        msg_data_cb: &'c mut dyn Fn(NetMsg),
+        //clients: &'b RefCell<Clients<'b>>,
+        net_msg_cb: &'c mut dyn FnMut(NetMsg) -> bool,
     ) -> Self {
         TcpEvent {
             epoll: epoll,
             clients: clients,
-            net_msg_cb: msg_data_cb,
+            net_msg_cb: net_msg_cb,
         }
     }
 }
 
 impl<'a, 'b, 'c> EpollEvent for TcpEvent<'a, 'b, 'c> {
-    fn read(&mut self, id: u64) {
-        if let Some(client) = self.clients.get_mut_client(id) {
+    fn read(&mut self, id: u64) -> bool {
+        if let Some(client) = self.clients.borrow_mut().get_client(id) {
             loop {
                 match client.tcp_reader.read(&mut client.stream) {
                     ReadResult::Data(msg_data) => {
-                        (self.net_msg_cb)(NetMsg {
+                        if (self.net_msg_cb)(NetMsg {
                             id: id,
                             data: msg_data,
-                        });
+                        }) == false
+                        {
+                            return false;
+                        }
                     }
                     ReadResult::BufferIsEmpty => {
                         break;
                     }
                     ReadResult::ReadZeroSize => {
                         error!("read({}) ReadZeroSize", id);
-                        if let Err(err) = self.clients.del_client(id) {
-                            error!("clients.del_client({}) Error:{}", id, err);
-                        }
-                        break;
-                    }
-                    ReadResult::MsgSizeTooBig => {
-                        error!("read({}) MsgSizeTooBig", id);
-                        if let Err(err) = self.clients.del_client(id) {
-                            error!("clients.del_client({}) Error:{}", id, err);
-                        }
-                        break;
-                    }
-                    ReadResult::MsgIdError => {
-                        error!("read({}) MsgIdError", id);
-                        if let Err(err) = self.clients.del_client(id) {
+                        if let Err(err) = self.clients.borrow_mut().del_client(id) {
                             error!("clients.del_client({}) Error:{}", id, err);
                         }
                         break;
                     }
                     ReadResult::Error(err) => {
                         error!("read({}) error:{}", id, err);
-                        if let Err(err) = self.clients.del_client(id) {
+                        if let Err(err) = self.clients.borrow_mut().del_client(id) {
                             error!("clients.del_client({}) Error:{}", id, err);
                         }
                         break;
@@ -77,10 +68,11 @@ impl<'a, 'b, 'c> EpollEvent for TcpEvent<'a, 'b, 'c> {
         } else {
             error!("client Id:{} Not exists", &id)
         }
+        return true;
     }
 
-    fn write(&mut self, id: u64) {
-        if let Some(client) = self.clients.get_mut_client(id) {
+    fn write(&mut self, id: u64) -> bool {
+        if let Some(client) = self.clients.borrow_mut().get_client(id) {
             match client.tcp_writer.write(&mut client.stream) {
                 WriteResult::Finish => (),
                 WriteResult::BufferFull => {
@@ -94,7 +86,7 @@ impl<'a, 'b, 'c> EpollEvent for TcpEvent<'a, 'b, 'c> {
                 }
                 WriteResult::Error(err) => {
                     error!("write result error:{}", err);
-                    if let Err(err) = self.clients.del_client(id) {
+                    if let Err(err) = self.clients.borrow_mut().del_client(id) {
                         error!("clients.del_client({}) Error:{}", id, err);
                     }
                 }
@@ -102,27 +94,34 @@ impl<'a, 'b, 'c> EpollEvent for TcpEvent<'a, 'b, 'c> {
         } else {
             error!("client Id:{} Not exists", &id)
         }
+        return true;
     }
 
-    fn error(&mut self, id: u64, err: String) {
+    fn error(&mut self, id: u64, err: String) -> bool {
         error!("error error:{}", err);
-        match self.clients.del_client(id) {
+        match self.clients.borrow_mut().del_client(id) {
             Ok(()) => (),
             Err(err) => error!("{}", err),
         }
+        return true;
     }
 
-    fn accept(&mut self, stream: TcpStream, _addr: SocketAddr) {
+    fn accept(&mut self, stream: TcpStream) -> bool {
         match stream.set_nonblocking(true) {
-            Ok(()) => {
-                self.clients.new_client(stream);
-            }
+            Ok(()) => match self.clients.borrow_mut().new_client(stream) {
+                Ok(()) => return true,
+                Err(err) => {
+                    error!("new_client:{}", err);
+                    return false;
+                }
+            },
             Err(err) => {
                 error!("set_nonblocking:{}", err);
                 match stream.shutdown(Shutdown::Both) {
                     Ok(()) => (),
                     Err(err) => error!("shutdown:{}", err),
                 }
+                return false;
             }
         }
     }

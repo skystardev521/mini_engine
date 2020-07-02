@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.0"
-engine = { version = "0.1.0", path = "../engine"}
+#net_ = { version = "0.1.0", path = "../engine"}
 socket = { version = "0.1.0", path = "../socket"}
 utils = { version = "0.1.0", path = "../utils"}
 #async-task = "3.0.0"

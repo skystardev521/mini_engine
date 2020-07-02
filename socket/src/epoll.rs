@@ -1,19 +1,10 @@
 use libc;
-use std::net::SocketAddr;
-use std::net::TcpStream;
 use std::os::unix::io::RawFd;
 use utils::native;
 
 #[derive(Debug)]
 pub struct Epoll {
     fd: libc::c_int,
-}
-
-pub trait EpollEvent {
-    fn read(&mut self, id: u64);
-    fn write(&mut self, id: u64);
-    fn error(&mut self, id: u64, err: String);
-    fn accept(&mut self, stream: TcpStream, addr: SocketAddr);
 }
 
 impl Drop for Epoll {

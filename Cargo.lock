@@ -6,14 +6,6 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "engine"
-version = "0.1.0"
-dependencies = [
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "socket 0.1.0",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -43,6 +35,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "net_agent"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "socket 0.1.0",
+]
+
+[[package]]
+name = "net_server"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "socket 0.1.0",
+]
+
+[[package]]
 name = "pkg-config"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -60,7 +68,6 @@ dependencies = [
 name = "test"
 version = "0.1.0"
 dependencies = [
- "engine 0.1.0",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "socket 0.1.0",
  "utils 0.1.0",
