@@ -1,6 +1,7 @@
 use libc;
 use std::os::unix::io::RawFd;
 use utils::native;
+use std::io::Error;
 
 #[derive(Debug)]
 pub struct Epoll {
@@ -24,7 +25,7 @@ impl Epoll {
                 epoll.fd = fd;
                 return Ok(epoll);
             } else {
-                return Err(native::c_strerr());
+                return Err(Error::last_os_error().to_string());
             }
         }
     }
@@ -40,7 +41,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(native::c_strerr());
+            return Err(Error::last_os_error().to_string());
         }
     }
     #[inline]
@@ -54,7 +55,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(native::c_strerr());
+            return Err(Error::last_os_error().to_string());
         }
     }
     #[inline]
@@ -69,7 +70,7 @@ impl Epoll {
             if ret != -1 {
                 return Ok(());
             }
-            return Err(native::c_strerr());
+            return Err(Error::last_os_error().to_string());
         }
     }
     #[inline]
@@ -82,7 +83,7 @@ impl Epoll {
             if libc::EINTR == *libc::__errno_location() {
                 return Ok(0);
             }
-            return Err(native::c_strerr());
+            return Err(Error::last_os_error().to_string());
         }
     }
 }

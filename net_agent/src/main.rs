@@ -14,9 +14,20 @@ use std::time::Duration;
 
 mod logic_config;
 mod logic_server;
+use utils::logger::Logger;
+
+const MAX_TICK_COUNT: u16 = 256;
 
 fn main() {
     println!("Hello, world!");
+    match Logger::init(
+        &String::from("info"),
+        &String::from("logs/net_agent.log"),
+        1,
+    ) {
+        Ok(()) => (),
+        Err(err) => println!("Logger::init error:{}", err),
+    }
 
     let tcp_server_confg: TcpServerConfig;
     match read_tcp_server_config("tcp_server_confg.txt".into()) {
@@ -96,9 +107,10 @@ fn net_thread_run(
         }
     }
 
+    let mut wait_timeout = 0;
     loop {
         if let Err(err) = tcp_server.wait_socket_event() {
-            error!("error:{}", err);
+            error!("tcp_server wait_socket_event:{}", err);
             break;
         }
         loop {
@@ -134,15 +146,23 @@ fn logic_thread(
         }
     };
     let mut logic_server = logic_server::LogicServer::new(&config, &mut new_net_msg_cb);
+
+    let mut tick_count = 0;
     loop {
-        loop {
-            match receiver.recv_timeout(timeout) {
-                Ok(net_msg) => {
-                    logic_server.new_net_msg(net_msg);
+        match receiver.recv_timeout(timeout) {
+            Ok(net_msg) => {
+                logic_server.new_net_msg(net_msg);
+                tick_count += 1;
+                if tick_count == MAX_TICK_COUNT {
+                    tick_count = 0;
+                    logic_server.tick();
                 }
-                Err(RecvTimeoutError::Timeout) => break,
-                Err(RecvTimeoutError::Disconnected) => break,
             }
+            Err(RecvTimeoutError::Timeout) => {
+                tick_count = 0;
+                logic_server.tick();
+            }
+            Err(RecvTimeoutError::Disconnected) => break,
         }
     }
 }

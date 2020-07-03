@@ -25,6 +25,44 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug executable 'net_agent'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=net_agent",
+                    "--package=net_agent"
+                ],
+                "filter": {
+                    "name": "net_agent",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'net_server'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=net_server",
+                    "--package=net_server"
+                ],
+                "filter": {
+                    "name": "net_server",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in executable 'test'",
             "cargo": {
                 "args": [

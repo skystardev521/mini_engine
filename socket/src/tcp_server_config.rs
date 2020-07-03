@@ -26,8 +26,8 @@ impl TcpServerConfig {}
 impl TcpServerConfigBuilder {
     pub fn new() -> TcpServerConfigBuilder {
         TcpServerConfigBuilder {
-            max_socket: 1024,
-            msg_max_size: 32,
+            max_socket: 10240,
+            msg_max_size: 32 * 1024,
             epoll_max_events: 256,
             epoll_wait_timeout: 1,
             socket_read_buffer: 4,

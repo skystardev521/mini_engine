@@ -2,26 +2,26 @@ use crate::epoll::Epoll;
 use crate::message::MsgData;
 use crate::message::MsgDataId;
 use crate::message::NetMsg;
-use crate::tcp_bind::TcpBind;
+use crate::tcp_listen::TcpListen;
 use crate::tcp_server_config::TcpServerConfig;
 use crate::tcp_socket::ReadResult;
 use crate::tcp_socket::WriteResult;
 use crate::tcp_socket_mgmt::TcpSocketMgmt;
 use libc;
-use log::{error, warn};
+use log::{error, info, warn};
+use std::io::Error;
 use std::io::ErrorKind;
 use std::net::Shutdown;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::RawFd;
 use std::thread;
-use utils::native;
 
-const TCP_BIND_ID: u64 = 0;
+const TCP_LISTEN_ID: u64 = 0;
 
 pub struct TcpServer<'a> {
     epoll: Epoll,
-    tcp_bind: TcpBind,
+    tcp_listen: TcpListen,
     epoll_wait_timeout: i32,
     tcp_socket_mgmt: TcpSocketMgmt,
     new_net_msg_cb: &'a mut dyn Fn(NetMsg),
@@ -44,9 +44,16 @@ impl<'a> TcpServer<'a> {
         new_net_msg_cb: &'a mut dyn Fn(NetMsg),
     ) -> Result<Self, String> {
         let epoll: Epoll = Epoll::new()?;
-        let tcp_bind = TcpBind::new(&cfg.bind_socket_addr)?;
+
+        let tcp_listen = TcpListen::new(&cfg.bind_socket_addr)?;
+        epoll.ctl_add_fd(
+            TCP_LISTEN_ID,
+            tcp_listen.get_listen().as_raw_fd(),
+            libc::EPOLLIN,
+        )?;
+
         let tcp_socket_mgmt = TcpSocketMgmt::new(
-            TCP_BIND_ID,
+            TCP_LISTEN_ID,
             cfg.max_socket,
             cfg.msg_max_size,
             cfg.wait_write_msg_max_num,
@@ -54,7 +61,7 @@ impl<'a> TcpServer<'a> {
 
         Ok(TcpServer {
             epoll,
-            tcp_bind,
+            tcp_listen,
             new_net_msg_cb,
             tcp_socket_mgmt,
             epoll_wait_timeout: cfg.epoll_wait_timeout,
@@ -74,7 +81,7 @@ impl<'a> TcpServer<'a> {
             Ok(num) => {
                 for n in 0..num as usize {
                     let event = self.vec_epoll_event[n];
-                    if event.u64 == TCP_BIND_ID {
+                    if event.u64 == TCP_LISTEN_ID {
                         self.accept();
                         continue;
                     }
@@ -86,7 +93,7 @@ impl<'a> TcpServer<'a> {
                         self.write(event.u64);
                     }
                     if (event.events & libc::EPOLLERR as u32) != 0 {
-                        self.error(event.u64, native::c_strerr());
+                        self.error(event.u64, Error::last_os_error().to_string());
                     }
                     //if event.events & libc::EPOLLHUP {}  | libc::EPOLLHUP
                 }
@@ -111,12 +118,12 @@ impl<'a> TcpServer<'a> {
                     }
                     ReadResult::ReadZeroSize => {
                         self.del_socket(id);
-                        warn!("tcp_socket.reader.read :{}", "ReadZeroSize");
+                        warn!("tcp_socket.reader.read :{}", "Read Zero Size");
                         break;
                     }
                     ReadResult::Error(err) => {
                         self.del_socket(id);
-                        error!("tcp_socket.reader.read err:{}", err);
+                        error!("tcp_socket.reader.read id:{} err:{}", id, err);
                         break;
                     }
                 }
@@ -195,9 +202,10 @@ impl<'a> TcpServer<'a> {
 
     fn accept(&mut self) {
         loop {
-            match self.tcp_bind.get_listen().accept() {
+            match self.tcp_listen.get_listen().accept() {
                 Ok((socket, _)) => {
                     self.new_socket(socket);
+                    info!("new connect");
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
@@ -235,6 +243,7 @@ impl<'a> TcpServer<'a> {
         }
     }
     fn del_socket(&mut self, id: u64) {
+        info!("del_socket id:{}", id);
         match self.tcp_socket_mgmt.del_socket(id) {
             Ok(tcp_socket) => {
                 if let Err(err) = self.epoll.ctl_del_fd(id, tcp_socket.socket.as_raw_fd()) {

@@ -10,12 +10,9 @@ use std::thread;
 use std::time::Duration;
 
 pub fn test() {
-    client();
-    client();
-    client();
-    client();
-    client();
-    client();
+    for _ in 0..10000 {
+        client();
+    }
 
     loop {
         thread::sleep(Duration::from_secs(60))
@@ -37,8 +34,8 @@ fn write(client: &mut TcpSocket) -> bool {
                 return true; //break;
             }
             WriteResult::BufferFull => {
-                error!("write result:{}", "BufferFull");
-                thread::sleep(std::time::Duration::from_millis(10));
+                //error!("write result:{}", "BufferFull");
+                //thread::sleep(std::time::Duration::from_millis(1));
                 //break;
             }
             WriteResult::Error(err) => {
@@ -53,11 +50,13 @@ fn read(client: &mut TcpSocket) {
     loop {
         match client.reader.read(&mut client.socket) {
             ReadResult::Data(msg_data) => {
+                /*
                 info!(
-                    "id:{} data:{:?}",
+                    "read id:{} data:{:?}",
                     &msg_data.id,
                     String::from_utf8_lossy(&msg_data.data).to_string()
                 );
+                */
                 break;
             }
 
@@ -66,7 +65,7 @@ fn read(client: &mut TcpSocket) {
                     "read({:?})  BufferIsEmpty",
                     client.socket.local_addr().unwrap()
                 );
-                thread::sleep(std::time::Duration::from_millis(100));
+                //thread::sleep(std::time::Duration::from_millis(1));
                 //return ReadResult::BufferIsEmpty;
             }
             ReadResult::ReadZeroSize => {
@@ -106,7 +105,7 @@ fn client() -> thread::JoinHandle<()> {
 
                 let mut client = TcpSocket::new(tcp_strem, 1024);
 
-                let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+                let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
 
                 let buffer = str.as_bytes();
 
@@ -120,16 +119,11 @@ fn client() -> thread::JoinHandle<()> {
 
                     msg_len += 1;
                     if msg_len == str.len() {
-                        msg_len = 10;
+                        msg_len = 32;
                     }
 
-                    thread::sleep(std::time::Duration::from_secs(1));
-                    /*
-                    info!(
-                        "write new data start:{}---------------------------",
-                        msg_num
-                    );
-                    */
+                    //thread::sleep(std::time::Duration::from_millis(1));
+
                     let mut data: Vec<u8> = vec![0u8; msg_len];
                     data.copy_from_slice(&buffer[0..msg_len]);
 
@@ -144,7 +138,7 @@ fn client() -> thread::JoinHandle<()> {
                     }
 
                     if msg_num % 10000000 == 0 {
-                        info!("write data:{}", msg_num);
+                        info!("read write data:{}", msg_num);
                     }
 
                     read(&mut client);
@@ -155,4 +149,3 @@ fn client() -> thread::JoinHandle<()> {
         }
     })
 }
-

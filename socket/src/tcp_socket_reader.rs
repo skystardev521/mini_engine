@@ -57,10 +57,12 @@ impl TcpSocketReader {
                             //--------------------decode msg head end-------------------
 
                             if new_id != self.next_id {
-                                return ReadResult::Error("MsgIdError".into());
+                                return ReadResult::Error("Msg Id Error".into());
                             }
                             if new_data_size > self.max_size {
-                                return ReadResult::Error("MsgSizeTooBig".into());
+                                return ReadResult::Error(format!(
+                                    "socket.read Msg Size Too Big size:{}", new_data_size
+                                ));
                             }
 
                             if self.next_id == tcp_socket_const::MSG_MAX_ID {
