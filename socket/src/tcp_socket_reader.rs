@@ -9,7 +9,7 @@ use utils::bytes;
 
 pub struct TcpSocketReader {
     //包id(0~4096)
-    id: u16,
+    next_id: u16,
     max_size: u32,
     head_pos: usize,
     data_pos: usize,
@@ -21,7 +21,7 @@ impl TcpSocketReader {
     /// max_size：消息的最大字节1024 * 1024
     pub fn new(max_size: u32) -> Box<Self> {
         Box::new(TcpSocketReader {
-            id: 0,
+            next_id: 0,
             head_pos: 0,
             data_pos: 0,
             head_data: [0u8; tcp_socket_const::MSG_HEAD_SIZE],
@@ -56,17 +56,17 @@ impl TcpSocketReader {
                             let new_data_size = (new_data >> 12) as u32;
                             //--------------------decode msg head end-------------------
 
-                            if new_id != self.id {
+                            if new_id != self.next_id {
                                 return ReadResult::Error("MsgIdError".into());
                             }
                             if new_data_size > self.max_size {
                                 return ReadResult::Error("MsgSizeTooBig".into());
                             }
 
-                            if self.id == tcp_socket_const::MSG_MAX_ID {
-                                self.id = 0;
+                            if self.next_id == tcp_socket_const::MSG_MAX_ID {
+                                self.next_id = 0;
                             } else {
-                                self.id += 1;
+                                self.next_id += 1;
                             }
 
                             if new_data_size == 0 {

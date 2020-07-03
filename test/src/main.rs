@@ -3,7 +3,9 @@ use utils::logger;
 //use utils::time;
 pub mod test_tcp;
 
-use engine::engine::Engine;
+use std::io::prelude::*;
+use std::net::TcpStream;
+use utils::time;
 
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,
@@ -15,11 +17,28 @@ fn main() {
         Err(err) => println!("Logger::init error:{}", err),
     }
 
-    //test_tcp::test();
+    let ts1 = time::timestamp();
+    println!("start connect time:{}", ts1);
+    match TcpStream::connect("www.baidu.com:80") {
+        Ok(socket) => {
+            let ts2 = time::timestamp();
+            println!("end connect time:{}", ts2);
+            println!("ts2 - ts1 time:{}", ts2 - ts1);
+            //socket.write(b"GET / HTTP/1.0\n\n").unwrap(); //获取发送网页
 
-    let engine = Engine::new();
+            /*
+            let mut buffer = vec![];
+            let response = socket.read_to_end(&mut buffer).unwrap(); //得到结果
+            let s = String::from_utf8(buffer).unwrap(); //转换结果为字符串.
+            println!("{}", s);
+            */
+        }
+        Err(err) => {
+            println!("connect error:{}", err);
+        }
+    } //
 
-    engine.run();
+    test_tcp::test();
 
     /*
         let mut thread_pool: Vec<thread::JoinHandle<()>> = vec![];
@@ -35,79 +54,4 @@ fn main() {
     */
 
     let mut hm: std::collections::HashMap<&str, i32> = std::collections::HashMap::new();
-
-    let mut f_mut = || -> u16 {
-        hm.insert("key", 999);
-        9999
-    };
-
-    fn_mut_closure(&mut f_mut);
-    fn_mut_closure_1(&mut f_mut);
-
-    fn_mut_closure(&mut || -> u16 {
-        //hm.insert("key", 999);
-        return 9999;
-    });
-
-    let f = || -> u16 { 9999 };
-
-    fn_closure(&f);
-    fn_closure_1(f);
-
-    let fp = |p| -> u16 { 9999 + p };
-
-    fn_pram(fp);
-    fn_pram_1(fp);
-    fn_once_closure_1(f);
-
-    let _ret_clos = returns_closure();
-}
-
-fn fn_pram<F>(f: F)
-where
-    F: Fn(u16) -> u16,
-{
-    println!("f result:{}", f(123));
-}
-
-fn fn_pram_1(f: fn(u16) -> u16) {
-    println!("f result:{}", f(123));
-}
-
-fn fn_mut_closure(f: &mut dyn FnMut() -> u16) {
-    f();
-}
-fn fn_mut_closure_1<F>(f: &mut F)
-where
-    F: FnMut() -> u16,
-{
-    f();
-}
-/*
-fn fn_mut_closure_2<F>(f: &mut F)
-where
-    F: FnMut(u16) -> u16,
-{
-    f(1);
-}
-*/
-fn fn_closure(f: &dyn Fn() -> u16) {
-    f();
-}
-fn fn_closure_1<F>(f: F)
-where
-    F: Fn() -> u16,
-{
-    f();
-}
-
-fn fn_once_closure_1<F>(f: F)
-where
-    F: FnOnce() -> u16,
-{
-    f();
-}
-
-fn returns_closure() -> Box<dyn Fn(i32) -> i32> {
-    Box::new(|x| x + 1)
 }
