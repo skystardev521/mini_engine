@@ -95,7 +95,6 @@ impl<'a> TcpServer<'a> {
                     if (event.events & libc::EPOLLERR as u32) != 0 {
                         self.error(event.u64, Error::last_os_error().to_string());
                     }
-                    //if event.events & libc::EPOLLHUP {}  | libc::EPOLLHUP
                 }
                 return Ok(());
             }
@@ -104,6 +103,7 @@ impl<'a> TcpServer<'a> {
     }
 
     fn read(&mut self, id: u64) {
+        info!("read id:{}", id);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(id) {
             loop {
                 match tcp_socket.reader.read(&mut tcp_socket.socket) {
@@ -205,7 +205,7 @@ impl<'a> TcpServer<'a> {
             match self.tcp_listen.get_listen().accept() {
                 Ok((socket, _)) => {
                     self.new_socket(socket);
-                    info!("new connect");
+                    //info!("new connect");
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,

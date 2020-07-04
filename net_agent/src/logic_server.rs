@@ -28,7 +28,7 @@ impl<'a> LogicServer<'a> {
     }
 
     pub fn new_net_msg(&mut self, net_msg: NetMsg) {
-        //info!("net_msg id:{}", net_msg.id);
+        info!("net_msg id:{}", net_msg.id);
         (self.new_net_msg_cb)(net_msg);
     }
 

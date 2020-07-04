@@ -61,7 +61,8 @@ impl TcpSocketReader {
                             }
                             if new_data_size > self.max_size {
                                 return ReadResult::Error(format!(
-                                    "socket.read Msg Size Too Big size:{}", new_data_size
+                                    "socket.read Msg Size Too Big size:{}",
+                                    new_data_size
                                 ));
                             }
 

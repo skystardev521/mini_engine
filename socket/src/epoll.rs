@@ -1,7 +1,6 @@
 use libc;
-use std::os::unix::io::RawFd;
-use utils::native;
 use std::io::Error;
+use std::os::unix::io::RawFd;
 
 #[derive(Debug)]
 pub struct Epoll {

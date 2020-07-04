@@ -10,8 +10,12 @@ use std::thread;
 use std::time::Duration;
 
 pub fn test() {
-    for _ in 0..10000 {
-        client();
+    let mut thread_pool: Vec<(thread::JoinHandle<()>, thread::JoinHandle<()>)> = Vec::new();
+
+    thread::sleep(std::time::Duration::from_secs(1));
+
+    for _ in 0..1 {
+        thread_pool.push(new_client().unwrap());
     }
 
     loop {
@@ -25,13 +29,44 @@ pub fn test() {
     */
 }
 
-fn write(client: &mut TcpSocket) -> bool {
+fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
+    let mut client = TcpSocket::new(socket, 1024);
+    thread::spawn(move || {
+        info!("client-->{:?}", std::thread::current().id());
+        let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+
+        let buffer = str.as_bytes();
+        let mut msg_num: u64 = 0;
+        let mut msg_len = 100;
+        loop {
+            msg_num += 1;
+            msg_len += 1;
+            if msg_len == str.len() {
+                msg_len = 100;
+            }
+            let mut data: Vec<u8> = vec![0u8; msg_len];
+            data.copy_from_slice(&buffer[0..msg_len]);
+
+            let msg_data = Box::new(MsgData { id: 1, data: data });
+
+            if let Err(err) = client.writer.add_msg_data(msg_data) {
+                info!("add_msg_data result err:{}", err);
+            }
+            write(&mut client);
+            if msg_num % 10000 == 0 {
+                info!("read write data:{}", msg_num);
+            }
+        }
+    })
+}
+
+fn write(client: &mut TcpSocket) {
     loop {
         match client.writer.write(&mut client.socket) {
             WriteResult::Finish => {
                 //info!("write result:{}", "Finish");
                 //thread::sleep(std::time::Duration::from_millis(1));
-                return true; //break;
+                //return true; //break;
             }
             WriteResult::BufferFull => {
                 //error!("write result:{}", "BufferFull");
@@ -40,23 +75,28 @@ fn write(client: &mut TcpSocket) -> bool {
             }
             WriteResult::Error(err) => {
                 error!("write result error:{}", err);
-                return false; //break;
+                //return false; //break;
             }
         }
     }
+}
+
+fn loop_read(socket: TcpStream) -> thread::JoinHandle<()> {
+    let mut client = TcpSocket::new(socket, 1024);
+    thread::spawn(move || loop {
+        read(&mut client);
+    })
 }
 
 fn read(client: &mut TcpSocket) {
     loop {
         match client.reader.read(&mut client.socket) {
             ReadResult::Data(msg_data) => {
-                /*
                 info!(
                     "read id:{} data:{:?}",
                     &msg_data.id,
                     String::from_utf8_lossy(&msg_data.data).to_string()
                 );
-                */
                 break;
             }
 
@@ -66,7 +106,6 @@ fn read(client: &mut TcpSocket) {
                     client.socket.local_addr().unwrap()
                 );
                 //thread::sleep(std::time::Duration::from_millis(1));
-                //return ReadResult::BufferIsEmpty;
             }
             ReadResult::ReadZeroSize => {
                 error!(
@@ -88,64 +127,25 @@ fn read(client: &mut TcpSocket) {
                     error!("shutdown Error:{}", err);
                 }
                 break;
-                //return ReadResult::Error(err);
             }
         }
     }
 }
 
-fn client() -> thread::JoinHandle<()> {
-    std::thread::spawn(move || {
-        info!("client-->{:?}", std::thread::current().id());
-        thread::sleep(std::time::Duration::from_secs(5));
+fn new_client() -> Result<(thread::JoinHandle<()>, thread::JoinHandle<()>), String> {
+    match TcpStream::connect("0.0.0.0:9999") {
+        Ok(socket) => {
+            warn!("connect success:{:?}", socket.local_addr());
 
-        match TcpStream::connect("0.0.0.0:9999") {
-            Ok(tcp_strem) => {
-                warn!("connect success:{:?}", tcp_strem.local_addr());
+            let loop_write_thread = loop_write(socket.try_clone().unwrap());
+            let loop_read_thread = loop_read(socket.try_clone().unwrap());
 
-                let mut client = TcpSocket::new(tcp_strem, 1024);
-
-                let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
-
-                let buffer = str.as_bytes();
-
-                thread::sleep(std::time::Duration::from_secs(1));
-                let mut msg_num: u64 = 0;
-
-                let mut msg_len = 10;
-
-                loop {
-                    msg_num += 1;
-
-                    msg_len += 1;
-                    if msg_len == str.len() {
-                        msg_len = 32;
-                    }
-
-                    //thread::sleep(std::time::Duration::from_millis(1));
-
-                    let mut data: Vec<u8> = vec![0u8; msg_len];
-                    data.copy_from_slice(&buffer[0..msg_len]);
-
-                    let msg_data = Box::new(MsgData { id: 1, data: data });
-
-                    if let Err(err) = client.writer.add_msg_data(msg_data) {
-                        info!("add_msg_data result err:{}", err);
-                    }
-
-                    if write(&mut client) == false {
-                        break;
-                    }
-
-                    if msg_num % 10000000 == 0 {
-                        info!("read write data:{}", msg_num);
-                    }
-
-                    read(&mut client);
-                }
-            }
-
-            Err(err) => error!("connect error:{}", err),
+            return Ok((loop_write_thread, loop_read_thread));
         }
-    })
+
+        Err(err) => {
+            error!("connect error:{}", err);
+            return Err(format!("{}", err));
+        }
+    }
 }
