@@ -22,9 +22,8 @@ const TCP_LISTEN_ID: u64 = 0;
 pub struct TcpServer<'a> {
     epoll: Epoll,
     tcp_listen: TcpListen,
-    epoll_wait_timeout: i32,
     tcp_socket_mgmt: TcpSocketMgmt,
-    new_net_msg_cb: &'a mut dyn Fn(NetMsg),
+    net_msg_cb: &'a mut dyn Fn(NetMsg),
     vec_epoll_event: Vec<libc::epoll_event>,
 }
 
@@ -39,10 +38,7 @@ impl<'a> Drop for TcpServer<'a> {
 }
 
 impl<'a> TcpServer<'a> {
-    pub fn new(
-        cfg: &TcpServerConfig,
-        new_net_msg_cb: &'a mut dyn Fn(NetMsg),
-    ) -> Result<Self, String> {
+    pub fn new(cfg: &TcpServerConfig, net_msg_cb: &'a mut dyn Fn(NetMsg)) -> Result<Self, String> {
         let epoll: Epoll = Epoll::new()?;
 
         let tcp_listen = TcpListen::new(&cfg.bind_socket_addr)?;
@@ -62,22 +58,21 @@ impl<'a> TcpServer<'a> {
         Ok(TcpServer {
             epoll,
             tcp_listen,
-            new_net_msg_cb,
+            net_msg_cb,
             tcp_socket_mgmt,
-            epoll_wait_timeout: cfg.epoll_wait_timeout,
             vec_epoll_event: vec![
                 libc::epoll_event { events: 0, u64: 0 };
                 cfg.epoll_max_events as usize
             ],
         })
     }
-
-    pub fn wait_socket_event(&mut self) -> Result<(), String> {
+    pub fn tick(&mut self) {}
+    pub fn epoll_event(&mut self, epoll_wait_timeout: i32) -> Result<u16, String> {
         match self
             .epoll
-            .wait(self.epoll_wait_timeout, &mut self.vec_epoll_event)
+            .wait(epoll_wait_timeout, &mut self.vec_epoll_event)
         {
-            Ok(0) => return Ok(()),
+            Ok(0) => return Ok(0),
             Ok(num) => {
                 for n in 0..num as usize {
                     let event = self.vec_epoll_event[n];
@@ -96,7 +91,7 @@ impl<'a> TcpServer<'a> {
                         self.error(event.u64, Error::last_os_error().to_string());
                     }
                 }
-                return Ok(());
+                return Ok(num as u16);
             }
             Err(err) => return Err(err),
         }
@@ -108,7 +103,7 @@ impl<'a> TcpServer<'a> {
             loop {
                 match tcp_socket.reader.read(&mut tcp_socket.socket) {
                     ReadResult::Data(msg_data) => {
-                        (self.new_net_msg_cb)(NetMsg {
+                        (self.net_msg_cb)(NetMsg {
                             id: id,
                             data: msg_data,
                         });
@@ -249,7 +244,7 @@ impl<'a> TcpServer<'a> {
                 if let Err(err) = self.epoll.ctl_del_fd(id, tcp_socket.socket.as_raw_fd()) {
                     warn!("epoll.ctl_del_fd({}) Error:{}", id, err);
                 }
-                (self.new_net_msg_cb)(NetMsg {
+                (self.net_msg_cb)(NetMsg {
                     id: id,
                     data: Box::new(MsgData {
                         id: MsgDataId::SocketClose as u16,

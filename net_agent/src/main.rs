@@ -12,14 +12,12 @@ use std::sync::mpsc::TrySendError;
 use std::thread;
 use std::time::Duration;
 
-mod logic_config;
-mod logic_server;
 use utils::logger::Logger;
 
-const MAX_TICK_COUNT: u16 = 256;
+pub mod config;
+pub mod server;
 
 fn main() {
-    println!("Hello, world!");
     match Logger::init(
         &String::from("info"),
         &String::from("logs/net_agent.log"),
@@ -38,11 +36,11 @@ fn main() {
         }
     }
 
-    let logic_config: logic_config::LogicConfig;
-    match read_logic_server_config("logic_config.txt".into()) {
-        Ok(config) => logic_config = config,
+    let config: config::Config;
+    match read_server_config("config.txt".into()) {
+        Ok(cfg) => config = cfg,
         Err(err) => {
-            error!("LogicConfig error:{}", err);
+            error!("Config error:{}", err);
             return;
         }
     }
@@ -62,8 +60,8 @@ fn main() {
         net_thread_run(&tcp_server_confg, net_receiver, net_sync_sender);
     });
 
-    let _logic_thread = logic_builder.spawn(move || {
-        logic_thread(&logic_config, logic_receiver, logic_sync_sender);
+    let _agent_thread = logic_builder.spawn(move || {
+        agent_thread(&config, logic_receiver, logic_sync_sender);
     });
 
     loop {
@@ -77,8 +75,8 @@ fn read_tcp_server_config(_path: String) -> Result<TcpServerConfig, String> {
     Ok(config)
 }
 
-fn read_logic_server_config(_path: String) -> Result<logic_config::LogicConfig, String> {
-    let config_builder = logic_config::LogicConfigBuilder::new();
+fn read_server_config(_path: String) -> Result<config::Config, String> {
+    let config_builder = config::ConfigBuilder::new();
     let config = config_builder.builder();
     Ok(config)
 }
@@ -88,7 +86,7 @@ fn net_thread_run(
     receiver: Receiver<NetMsg>,
     sync_sender: SyncSender<NetMsg>,
 ) {
-    let mut new_net_msg_cb = |net_msg| match sync_sender.try_send(net_msg) {
+    let mut net_msg_cb = |net_msg| match sync_sender.try_send(net_msg) {
         Ok(()) => (), //return true,
         Err(TrySendError::Full(_)) => {
             error!("net sync_sender Full");
@@ -99,7 +97,7 @@ fn net_thread_run(
     };
 
     let mut tcp_server: TcpServer;
-    match TcpServer::new(&config, &mut new_net_msg_cb) {
+    match TcpServer::new(&config, &mut net_msg_cb) {
         Ok(server) => tcp_server = server,
         Err(err) => {
             error!("TcpServer::new error:{}", err);
@@ -107,16 +105,35 @@ fn net_thread_run(
         }
     }
 
-    let mut wait_timeout = 0;
+    let mut single_write_msg_count;
+    let mut epoll_wait_timeout = 0;
     loop {
-        if let Err(err) = tcp_server.wait_socket_event() {
-            error!("tcp_server wait_socket_event:{}", err);
-            break;
+        tcp_server.tick();
+
+        match tcp_server.epoll_event(epoll_wait_timeout) {
+            Ok(num) => {
+                if num == 0 {
+                    epoll_wait_timeout = 1;
+                } else if num == config.epoll_max_events {
+                    epoll_wait_timeout = 0;
+                }
+            }
+            Err(err) => {
+                error!("tcp_server wait_socket_event:{}", err);
+                break;
+            }
         }
+
         loop {
+            single_write_msg_count = 0;
             match receiver.try_recv() {
                 Ok(net_msg) => {
                     tcp_server.write_net_msg(net_msg);
+                    single_write_msg_count += 1;
+                    if single_write_msg_count == config.single_write_msg_max_num {
+                        epoll_wait_timeout = 0;
+                        break;
+                    }
                 }
                 Err(TryRecvError::Empty) => break,
 
@@ -129,14 +146,12 @@ fn net_thread_run(
     }
 }
 
-fn logic_thread(
-    config: &logic_config::LogicConfig,
+fn agent_thread(
+    config: &config::Config,
     receiver: Receiver<NetMsg>,
     sync_sender: SyncSender<NetMsg>,
 ) {
-    let timeout = Duration::from_millis(1);
-
-    let mut new_net_msg_cb = |net_msg| match sync_sender.try_send(net_msg) {
+    let mut net_msg_cb = |net_msg| match sync_sender.try_send(net_msg) {
         Ok(()) => (), //return true,
         Err(TrySendError::Full(_)) => {
             error!("net sync_sender Full");
@@ -145,22 +160,25 @@ fn logic_thread(
             error!("net sync_sender Disconnected");
         }
     };
-    let mut logic_server = logic_server::LogicServer::new(&config, &mut new_net_msg_cb);
+    let mut server = server::Server::new(&config, &mut net_msg_cb);
 
-    let mut tick_count = 0;
-    loop {
-        match receiver.recv_timeout(timeout) {
+    let mut single_read_msg_count;
+
+    let timeout_duration = Duration::from_millis(1);
+
+    'next_loop: loop {
+        server.tick();
+        single_read_msg_count = 0;
+        match receiver.recv_timeout(timeout_duration) {
             Ok(net_msg) => {
-                logic_server.new_net_msg(net_msg);
-                tick_count += 1;
-                if tick_count == MAX_TICK_COUNT {
-                    tick_count = 0;
-                    logic_server.tick();
+                server.new_net_msg(net_msg);
+                single_read_msg_count += 1;
+                if single_read_msg_count == config.single_read_msg_max_num {
+                    continue 'next_loop;
                 }
             }
             Err(RecvTimeoutError::Timeout) => {
-                tick_count = 0;
-                logic_server.tick();
+                continue 'next_loop;
             }
             Err(RecvTimeoutError::Disconnected) => break,
         }
