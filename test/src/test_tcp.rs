@@ -14,23 +14,17 @@ pub fn test() {
 
     thread::sleep(std::time::Duration::from_secs(1));
 
-    for _ in 0..1 {
+    for _ in 0..200 {
         thread_pool.push(new_client().unwrap());
     }
 
     loop {
         thread::sleep(Duration::from_secs(60))
     }
-    /*
-    match server() {
-        Ok(joinhandle) => joinhandle.join().unwrap(),
-        Err(err) => error!("{}", err),
-    }
-    */
 }
 
 fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
-    let mut client = TcpSocket::new(socket, 1024);
+    let mut client = TcpSocket::new(socket, 2024);
     thread::spawn(move || {
         info!("client-->{:?}", std::thread::current().id());
         let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
@@ -53,8 +47,8 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
                 info!("add_msg_data result err:{}", err);
             }
             write(&mut client);
-            if msg_num % 10000 == 0 {
-                info!("read write data:{}", msg_num);
+            if msg_num % 200000 == 0 {
+                info!("write data:{}", msg_num);
             }
         }
     })
@@ -64,14 +58,15 @@ fn write(client: &mut TcpSocket) {
     loop {
         match client.writer.write(&mut client.socket) {
             WriteResult::Finish => {
-                //info!("write result:{}", "Finish");
-                //thread::sleep(std::time::Duration::from_millis(1));
-                //return true; //break;
+                //info!("write result:Finish");
+                thread::sleep(std::time::Duration::from_millis(5));
+                //return true; //
+                break;
             }
             WriteResult::BufferFull => {
                 //error!("write result:{}", "BufferFull");
                 //thread::sleep(std::time::Duration::from_millis(1));
-                //break;
+                break;
             }
             WriteResult::Error(err) => {
                 error!("write result error:{}", err);
@@ -89,22 +84,31 @@ fn loop_read(socket: TcpStream) -> thread::JoinHandle<()> {
 }
 
 fn read(client: &mut TcpSocket) {
+    let mut msg_num: u64 = 0;
     loop {
         match client.reader.read(&mut client.socket) {
             ReadResult::Data(msg_data) => {
+                /*
                 info!(
                     "read id:{} data:{:?}",
                     &msg_data.id,
                     String::from_utf8_lossy(&msg_data.data).to_string()
                 );
-                break;
+                */
+                msg_num += 1;
+                if msg_num % 1000 == 0 {
+                    info!("read data:{}", msg_num);
+                }
+                //break;
             }
 
             ReadResult::BufferIsEmpty => {
+                /*
                 info!(
                     "read({:?})  BufferIsEmpty",
                     client.socket.local_addr().unwrap()
                 );
+                */
                 //thread::sleep(std::time::Duration::from_millis(1));
             }
             ReadResult::ReadZeroSize => {

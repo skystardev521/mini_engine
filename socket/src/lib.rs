@@ -8,7 +8,6 @@ pub mod tcp_server;
 pub mod tcp_server_config;
 pub mod tcp_socket;
 pub mod tcp_socket_const;
-pub mod tcp_socket_event;
 pub mod tcp_socket_mgmt;
 pub mod tcp_socket_reader;
 pub mod tcp_socket_writer;

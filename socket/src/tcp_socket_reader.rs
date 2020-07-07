@@ -105,6 +105,7 @@ impl TcpSocketReader {
 
         loop {
             //read msg data
+            //如果一个连接在内网死循环发送消息 这里会卡住
             match socket.read(&mut self.msg_data.data[self.data_pos..]) {
                 Ok(0) => return ReadResult::ReadZeroSize,
                 Ok(size) => {

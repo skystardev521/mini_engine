@@ -12,7 +12,7 @@ pub struct ThreadPool {
 }
 
 fn main() {
-    match Logger::init(&String::from("info"), &String::from("logs/test_log.log"), 1) {
+    match Logger::init(&String::from("info"), &String::from("logs/test_log.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),
     }

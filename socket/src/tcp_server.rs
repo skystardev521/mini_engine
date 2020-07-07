@@ -30,9 +30,9 @@ pub struct TcpServer<'a> {
 impl<'a> Drop for TcpServer<'a> {
     fn drop(&mut self) {
         if thread::panicking() {
-            println!("dropped TcpServer while unwinding");
+            error!("dropped TcpServer while unwinding");
         } else {
-            println!("dropped TcpServer while not unwinding");
+            error!("dropped TcpServer while not unwinding");
         }
     }
 }
@@ -98,7 +98,7 @@ impl<'a> TcpServer<'a> {
     }
 
     fn read(&mut self, id: u64) {
-        info!("read id:{}", id);
+        //info!("read id:{}", id);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(id) {
             loop {
                 match tcp_socket.reader.read(&mut tcp_socket.socket) {

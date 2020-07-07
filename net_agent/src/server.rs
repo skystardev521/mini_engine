@@ -1,7 +1,7 @@
 use socket::message::NetMsg;
 
 use crate::config::Config;
-use log::info;
+use log::error;
 use std::thread;
 
 pub struct Server<'a> {
@@ -12,9 +12,9 @@ pub struct Server<'a> {
 impl<'a> Drop for Server<'a> {
     fn drop(&mut self) {
         if thread::panicking() {
-            println!("dropped Server while unwinding");
+            error!("dropped Server while unwinding");
         } else {
-            println!("dropped Server while not unwinding");
+            error!("dropped Server while not unwinding");
         }
     }
 }
@@ -25,7 +25,7 @@ impl<'a> Server<'a> {
     }
 
     pub fn new_net_msg(&mut self, net_msg: NetMsg) {
-        info!("net_msg id:{}", net_msg.id);
+        //info!("new_net_msg id:{}", net_msg.id);
         (self.net_msg_cb)(net_msg);
     }
 

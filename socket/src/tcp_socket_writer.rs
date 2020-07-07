@@ -39,6 +39,10 @@ impl TcpSocketWriter {
         self.vec_deque.len() as u16
     }
 
+    pub fn get_msg_data_vec_deque(&mut self) -> VecDeque<Box<MsgData>> {
+        std::mem::replace(&mut self.vec_deque, VecDeque::new())
+    }
+
     #[inline]
     pub fn add_msg_data(&mut self, msg_data: Box<MsgData>) -> Result<(), String> {
         if msg_data.data.len() <= self.max_size {

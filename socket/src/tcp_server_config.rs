@@ -34,7 +34,7 @@ impl TcpServerConfigBuilder {
             epoll_wait_timeout: 1,
             socket_read_buffer: 4,
             socket_write_buffer: 4,
-            wait_write_msg_max_num: 128,
+            wait_write_msg_max_num: 1280,
             single_write_msg_max_num: 256,
             bind_socket_addr: "0.0.0.0:9999".into(),
         }

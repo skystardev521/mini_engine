@@ -1,1 +1,42 @@
-//管理Tcp连接
+use crate::tcp_socket::TcpSocket;
+
+pub struct TcpClient {
+    id: u8,
+    /// 已重连次数
+    connect_count: u8,
+    last_connect_timestamp: u64,
+    tcp_socket_opt: Option<TcpSocket>,
+}
+
+impl TcpClient {
+    pub fn new(id: u8, tcp_socket: TcpSocket) -> Self {
+        TcpClient {
+            id,
+            connect_count: 0,
+            last_connect_timestamp: 0,
+            tcp_socket_opt: Some(tcp_socket),
+        }
+    }
+    #[inline]
+    pub fn get_id(&self) -> u8 {
+        self.id
+    }
+
+    #[inline]
+    pub fn get_connect_count(&self) -> u8 {
+        self.connect_count
+    }
+    #[inline]
+    pub fn get_tcp_socket_opt(&self) -> &Option<TcpSocket> {
+        &self.tcp_socket_opt
+    }
+
+    #[inline]
+    pub fn set_tcp_socket_opt(&mut self, tcp_socket_opt: Option<TcpSocket>) {
+        self.tcp_socket_opt = tcp_socket_opt
+    }
+    #[inline]
+    pub fn get_last_connect_timestamp(&self) -> u64 {
+        self.last_connect_timestamp
+    }
+}

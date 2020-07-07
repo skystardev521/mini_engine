@@ -14,15 +14,17 @@ use std::time::Duration;
 
 use utils::logger::Logger;
 
-pub mod config;
-pub mod server;
+use net_agent::Config;
+use net_agent::ConfigBuilder;
+use net_agent::Server;
+
+use utils::time;
+
+const LOG_FILE_DURATION: u64 = 60 * 60 * 1000;
 
 fn main() {
-    match Logger::init(
-        &String::from("info"),
-        &String::from("logs/net_agent.log"),
-        1,
-    ) {
+    let mut open_log_file_ts = time::timestamp();
+    match Logger::init(&String::from("info"), &String::from("logs/net_agent.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),
     }
@@ -36,7 +38,7 @@ fn main() {
         }
     }
 
-    let config: config::Config;
+    let config: Config;
     match read_server_config("config.txt".into()) {
         Ok(cfg) => config = cfg,
         Err(err) => {
@@ -51,9 +53,9 @@ fn main() {
     let logic_builder = thread::Builder::new().name("Logic".into());
 
     //阻塞模式 设置队列大小
-    let (net_sync_sender, logic_receiver): (SyncSender<NetMsg>, Receiver<NetMsg>) =
+    let (net_sync_sender, agent_receiver): (SyncSender<NetMsg>, Receiver<NetMsg>) =
         mpsc::sync_channel(channel_size);
-    let (logic_sync_sender, net_receiver): (SyncSender<NetMsg>, Receiver<NetMsg>) =
+    let (agent_sync_sender, net_receiver): (SyncSender<NetMsg>, Receiver<NetMsg>) =
         mpsc::sync_channel(channel_size);
 
     let _net_thread = net_builder.spawn(move || {
@@ -61,11 +63,16 @@ fn main() {
     });
 
     let _agent_thread = logic_builder.spawn(move || {
-        agent_thread(&config, logic_receiver, logic_sync_sender);
+        agent_thread_run(&config, agent_receiver, agent_sync_sender);
     });
 
     loop {
-        thread::sleep(Duration::from_secs(60))
+        thread::sleep(Duration::from_secs(60));
+
+        if open_log_file_ts + LOG_FILE_DURATION < time::timestamp() {
+            log::logger().flush();
+            open_log_file_ts = time::timestamp();
+        }
     }
 }
 
@@ -75,8 +82,8 @@ fn read_tcp_server_config(_path: String) -> Result<TcpServerConfig, String> {
     Ok(config)
 }
 
-fn read_server_config(_path: String) -> Result<config::Config, String> {
-    let config_builder = config::ConfigBuilder::new();
+fn read_server_config(_path: String) -> Result<Config, String> {
+    let config_builder = ConfigBuilder::new();
     let config = config_builder.builder();
     Ok(config)
 }
@@ -86,14 +93,16 @@ fn net_thread_run(
     receiver: Receiver<NetMsg>,
     sync_sender: SyncSender<NetMsg>,
 ) {
-    let mut net_msg_cb = |net_msg| match sync_sender.try_send(net_msg) {
-        Ok(()) => (), //return true,
-        Err(TrySendError::Full(_)) => {
-            error!("net sync_sender Full");
-        }
-        Err(TrySendError::Disconnected(_)) => {
-            error!("net sync_sender Disconnected");
-        }
+    let mut net_msg_cb = |net_msg: NetMsg| {
+        match sync_sender.try_send(net_msg) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                //error!("net_thread try_send Full");
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                error!("net_thread try_send Disconnected");
+            }
+        };
     };
 
     let mut tcp_server: TcpServer;
@@ -107,14 +116,14 @@ fn net_thread_run(
 
     let mut single_write_msg_count;
     let mut epoll_wait_timeout = 0;
+
     loop {
         tcp_server.tick();
 
         match tcp_server.epoll_event(epoll_wait_timeout) {
+            Ok(0) => epoll_wait_timeout = 1,
             Ok(num) => {
-                if num == 0 {
-                    epoll_wait_timeout = 1;
-                } else if num == config.epoll_max_events {
+                if num == config.epoll_max_events {
                     epoll_wait_timeout = 0;
                 }
             }
@@ -126,6 +135,7 @@ fn net_thread_run(
 
         loop {
             single_write_msg_count = 0;
+
             match receiver.try_recv() {
                 Ok(net_msg) => {
                     tcp_server.write_net_msg(net_msg);
@@ -138,7 +148,7 @@ fn net_thread_run(
                 Err(TryRecvError::Empty) => break,
 
                 Err(TryRecvError::Disconnected) => {
-                    error!("net receiver Disconnected");
+                    error!("net_thread receiver.try_recv:Disconnected");
                     break;
                 }
             }
@@ -146,21 +156,19 @@ fn net_thread_run(
     }
 }
 
-fn agent_thread(
-    config: &config::Config,
-    receiver: Receiver<NetMsg>,
-    sync_sender: SyncSender<NetMsg>,
-) {
-    let mut net_msg_cb = |net_msg| match sync_sender.try_send(net_msg) {
-        Ok(()) => (), //return true,
-        Err(TrySendError::Full(_)) => {
-            error!("net sync_sender Full");
-        }
-        Err(TrySendError::Disconnected(_)) => {
-            error!("net sync_sender Disconnected");
+fn agent_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: SyncSender<NetMsg>) {
+    let mut net_msg_cb = |net_msg: NetMsg| {
+        match sync_sender.try_send(net_msg) {
+            Ok(()) => (), //return true,
+            Err(TrySendError::Full(_)) => {
+                //error!("agent_thread try_send Full");
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                error!("agent_thread try_send Disconnected");
+            }
         }
     };
-    let mut server = server::Server::new(&config, &mut net_msg_cb);
+    let mut server = Server::new(&config, &mut net_msg_cb);
 
     let mut single_read_msg_count;
 
@@ -180,7 +188,9 @@ fn agent_thread(
             Err(RecvTimeoutError::Timeout) => {
                 continue 'next_loop;
             }
-            Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Disconnected) => {
+                error!("agent_thread recv_timeout Disconnected");
+            }
         }
     }
 }
