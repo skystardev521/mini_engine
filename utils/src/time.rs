@@ -27,6 +27,7 @@ pub struct Time {
     pub year: u16,  /* 年 - 其值等于实际年份减去1970 */
 }
 
+#[inline]
 pub fn timestamp() -> u64 {
     let now = SystemTime::now();
     match now.duration_since(UNIX_EPOCH) {
@@ -35,7 +36,8 @@ pub fn timestamp() -> u64 {
     }
 }
 
-//timezone：单位小时
+#[inline]
+/// timezone：单位小时
 pub fn now_time(timezone: f32) -> Time {
     timestamp_to_time(timestamp() + (timezone * 60f32 * 60f32 * 1000f32) as u64)
 }
@@ -140,54 +142,3 @@ pub fn time_to_timestamp(time: &Time) -> u64 {
     }
     timestamp
 }
-
-/*
-pub fn test() {
-    let mut time: u64 = 0;
-    let mut time2: u64 = 0;
-    let i: u64 = 0;
-    let mut t: Time;
-    time = 1592814558694;
-    // 验证一个周期4年 一天打印一次
-    for _i in 0..(4 * 365 + 1) {
-        t = timestamp_to_time(time);
-        println!("A time:{}", time);
-        println!(
-            "A {:0>2}-{:0>2} {:0>2}:{:0>2}:{:0>2}.{:0>3}",
-            t.month + 1,
-            t.day,
-            t.hour,
-            t.min,
-            t.sec,
-            t.ms
-        );
-
-        t.month += 1; //转换时月份需要加1，因为月份是从0开始的
-        time2 = time_to_timestamp(&t); //将localtime得到年月日时分秒再次转换成时间戳，验证算法是否正确
-        print!("B time:{}\r\n", time2);
-
-        if time != time2 {
-            panic!("time:{} != time2:{}", time, time2)
-        }
-
-        //let t: Time;
-
-        t = timestamp_to_time(time2);
-
-        print!(
-            "B {}-{:0>2}-{:0>2} {:0>2}:{:0>2}:{:0>2}.{:0>3}\r\n",
-            t.year,
-            t.month + 1,
-            t.day,
-            t.hour,
-            t.min,
-            t.sec,
-            t.ms
-        );
-        //let t: Time;
-        time += 24 * 3600;
-    }
-
-    return;
-}
-*/
