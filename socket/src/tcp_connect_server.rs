@@ -1,13 +1,13 @@
 use crate::epoll::Epoll;
 use crate::message::MsgData;
-use crate::message::MsgDataId;
 use crate::message::NetMsg;
-use crate::tcp_server_config::TcpServerConfig;
+use crate::message::ProtoId;
+use crate::tcp_connect_config::TcpConnectConfig;
 use crate::tcp_socket::ReadResult;
 use crate::tcp_socket::WriteResult;
 use crate::tcp_socket_mgmt::TcpSocketMgmt;
 use libc;
-use log::{error, warn};
+use log::{error, info, warn};
 use std::io::Error;
 use std::io::ErrorKind;
 use std::net::Shutdown;
@@ -24,8 +24,8 @@ const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 pub struct TcpConnectServer<'a> {
     epoll: Epoll,
     tcp_socket_mgmt: TcpSocketMgmt,
-    net_msg_cb: &'a mut dyn Fn(NetMsg),
     vec_epoll_event: Vec<libc::epoll_event>,
+    net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
 impl<'a> Drop for TcpConnectServer<'a> {
@@ -39,14 +39,14 @@ impl<'a> Drop for TcpConnectServer<'a> {
 }
 
 impl<'a> TcpConnectServer<'a> {
-    pub fn new(cfg: &TcpServerConfig, net_msg_cb: &'a mut dyn Fn(NetMsg)) -> Result<Self, String> {
+    pub fn new(
+        cfg: &TcpConnectConfig,
+        net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
+    ) -> Result<Self, String> {
         let epoll: Epoll = Epoll::new()?;
-        let tcp_socket_mgmt = TcpSocketMgmt::new(
-            TCP_LISTEN_ID,
-            cfg.max_socket,
-            cfg.msg_max_size,
-            cfg.wait_write_msg_max_num,
-        )?;
+        
+        let tcp_socket_mgmt =
+            TcpSocketMgmt::new(cfg.max_socket, cfg.msg_max_size, cfg.wait_write_msg_max_num)?;
 
         Ok(TcpConnectServer {
             epoll,
@@ -84,44 +84,61 @@ impl<'a> TcpConnectServer<'a> {
         }
     }
 
-    fn read_event(&mut self, id: u64) {
-        if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(id) {
+    fn read_event(&mut self, sid: u64) {
+        //info!("read id:{}", id);
+        if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
+            let mut msg_cb_err_reason = None;
             loop {
                 match tcp_socket.reader.read(&mut tcp_socket.socket) {
                     ReadResult::Data(msg_data) => {
-                        (self.net_msg_cb)(NetMsg {
-                            id: id,
+                        match (self.net_msg_cb)(NetMsg {
+                            sid: sid,
                             data: msg_data,
-                        });
+                        }) {
+                            Ok(()) => (),
+                            Err(pid) => {
+                                msg_cb_err_reason = Some(pid);
+                            }
+                        }
                     }
                     ReadResult::BufferIsEmpty => {
                         break;
                     }
                     ReadResult::ReadZeroSize => {
-                        self.del_socket(id);
+                        self.del_socket(sid);
                         warn!("tcp_socket.reader.read :{}", "Read Zero Size");
                         break;
                     }
                     ReadResult::Error(err) => {
-                        self.del_socket(id);
-                        error!("tcp_socket.reader.read id:{} err:{}", id, err);
+                        self.del_socket(sid);
+                        error!("tcp_socket.reader.read id:{} err:{}", sid, err);
                         break;
                     }
                 }
             }
+            if let Some(pid) = msg_cb_err_reason {
+                self.write_net_msg(NetMsg {
+                    sid: sid,
+                    data: Box::new(MsgData {
+                        ext: 0,
+                        data: vec![],
+                        pid: pid as u16,
+                    }),
+                });
+            }
         } else {
-            warn!("read_event tcp_socket_mgmt id no exitis:{}", id);
-        }
+            warn!("read_event tcp_socket_mgmt id no exitis:{}", sid);
+        };
     }
 
     #[inline]
     pub fn write_net_msg(&mut self, net_msg: NetMsg) {
         let msg_max_num = self.tcp_socket_mgmt.get_wait_write_msg_max_num();
-        match self.tcp_socket_mgmt.get_tcp_socket(net_msg.id) {
+        match self.tcp_socket_mgmt.get_tcp_socket(net_msg.sid) {
             Some(tcp_socket) => {
                 if tcp_socket.writer.get_msg_data_count() > msg_max_num {
-                    self.del_socket(net_msg.id);
-                    warn!("net_msg.id:{} Too much msg_data not send", net_msg.id);
+                    self.del_socket(net_msg.sid);
+                    warn!("net_msg.id:{} Too much msg_data not send", net_msg.sid);
                     return;
                 }
                 match tcp_socket.writer.add_msg_data(net_msg.data) {
@@ -131,101 +148,71 @@ impl<'a> TcpConnectServer<'a> {
                     }
                 }
                 if tcp_socket.writer.get_msg_data_count() == 1 {
-                    if let Err(err) = write_data(&self.epoll, net_msg.id, tcp_socket) {
-                        self.del_socket(net_msg.id);
+                    if let Err(err) = write_data(&self.epoll, net_msg.sid, tcp_socket) {
+                        self.del_socket(net_msg.sid);
                         warn!("tcp_socket.writer.write err:{}", err);
                     }
                 }
             }
             None => {
-                warn!("net_msg.id no exitis:{}", net_msg.id);
+                warn!("net_msg.id no exitis:{}", net_msg.sid);
             }
         }
     }
 
-    fn write_event(&mut self, id: u64) {
-        if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(id) {
-            if let Err(err) = write_data(&self.epoll, id, tcp_socket) {
-                self.del_socket(id);
+    fn write_event(&mut self, sid: u64) {
+        if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
+            if let Err(err) = write_data(&self.epoll, sid, tcp_socket) {
+                self.del_socket(sid);
                 warn!("tcp_socket.writer.write err:{}", err);
             }
         } else {
-            warn!("write_event tcp_socket_mgmt id no exitis:{}", id);
+            warn!("write_event tcp_socket_mgmt id no exitis:{}", sid);
         }
     }
 
-    fn error_event(&mut self, id: u64, err: String) {
-        self.del_socket(id);
+    fn error_event(&mut self, sid: u64, err: String) {
+        self.del_socket(sid);
         warn!("epoll event error:{}", err);
     }
 
-    fn new_socket(&mut self, socket: TcpStream) {
-        match socket.set_nonblocking(true) {
-            Ok(()) => {
-                let raw_fd = socket.as_raw_fd();
-                match self.tcp_socket_mgmt.new_socket(socket) {
-                    Ok(socket_id) => {
-                        match self.epoll.ctl_add_fd(socket_id, raw_fd, libc::EPOLLIN) {
-                            Ok(()) => (),
-                            Err(err) => {
-                                error!("epoll ctl_add_fd error:{}", err);
-                            }
-                        };
-                    }
-                    Err(err) => {
-                        error!("new_socket:{}", err);
-                    }
-                }
-            }
-            Err(err) => {
-                error!("set_nonblocking:{}", err);
-                match socket.shutdown(Shutdown::Both) {
-                    Ok(()) => (),
-                    Err(err) => {
-                        error!("accept socket shutdown:{}", err);
-                    }
-                }
-            }
-        }
-    }
-
-    fn del_socket(&mut self, id: u64) {
-        match self.tcp_socket_mgmt.del_socket(id) {
+    fn del_socket(&mut self, sid: u64) {
+        match self.tcp_socket_mgmt.del_socket(sid) {
             Ok(tcp_socket) => {
-                if let Err(err) = self.epoll.ctl_del_fd(id, tcp_socket.socket.as_raw_fd()) {
-                    warn!("epoll.ctl_del_fd({}) Error:{}", id, err);
+                if let Err(err) = self.epoll.ctl_del_fd(sid, tcp_socket.socket.as_raw_fd()) {
+                    warn!("epoll.ctl_del_fd({}) Error:{}", sid, err);
                 }
                 (self.net_msg_cb)(NetMsg {
-                    id: id,
+                    sid: sid,
                     data: Box::new(MsgData {
                         ext: 0,
                         data: vec![],
-                        pid: MsgDataId::SocketClose as u16,
+                        pid: ProtoId::SocketClose as u16,
                     }),
                 });
             }
             Err(err) => {
-                warn!("tcp_socket_mgmt.del_socket({}) Error:{}", id, err);
+                warn!("tcp_socket_mgmt.del_socket({}) Error:{}", sid, err);
             }
         }
     }
 }
 
-fn write_data(epoll: &Epoll, id: u64, tcp_socket: &mut TcpSocket) -> Result<(), String> {
+fn write_data(epoll: &Epoll, sid: u64, tcp_socket: &mut TcpSocket) -> Result<(), String> {
     match tcp_socket.writer.write(&mut tcp_socket.socket) {
         WriteResult::Finish => {
-            if tcp_socket.events == libc::EPOLLIN {
+            if tcp_socket.epoll_events == libc::EPOLLIN {
                 return Ok(());
             }
-            tcp_socket.events = libc::EPOLLIN;
-            return epoll.ctl_mod_fd(id, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
+            tcp_socket.epoll_events = libc::EPOLLIN;
+            return epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
         }
         WriteResult::BufferFull => {
-            if tcp_socket.events == EPOLL_IN_OUT {
+            if tcp_socket.epoll_events == EPOLL_IN_OUT {
                 return Ok(());
             }
-            tcp_socket.events = EPOLL_IN_OUT;
-            return epoll.ctl_mod_fd(id, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
+            tcp_socket.epoll_events = EPOLL_IN_OUT;
+            return epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
         }
         WriteResult::Error(err) => return Err(err),
     }

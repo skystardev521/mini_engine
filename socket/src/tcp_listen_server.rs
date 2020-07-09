@@ -8,7 +8,7 @@ use crate::tcp_socket::ReadResult;
 use crate::tcp_socket::WriteResult;
 use crate::tcp_socket_mgmt::TcpSocketMgmt;
 use libc;
-use log::{error, warn};
+use log::{error, info, warn};
 use std::io::Error;
 use std::io::ErrorKind;
 use std::net::Shutdown;
@@ -200,7 +200,7 @@ impl<'a> TcpListenServer<'a> {
             match self.tcp_listen.get_listen().accept() {
                 Ok((socket, addr)) => {
                     self.new_socket(socket);
-                    error!("tcp listen serrver new_socket:{}", addr)
+                    info!("tcp listen serrver new_socket:{}", addr)
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
@@ -262,17 +262,17 @@ impl<'a> TcpListenServer<'a> {
 fn write_data(epoll: &Epoll, sid: u64, tcp_socket: &mut TcpSocket) -> Result<(), String> {
     match tcp_socket.writer.write(&mut tcp_socket.socket) {
         WriteResult::Finish => {
-            if tcp_socket.events == libc::EPOLLIN {
+            if tcp_socket.epoll_events == libc::EPOLLIN {
                 return Ok(());
             }
-            tcp_socket.events = libc::EPOLLIN;
+            tcp_socket.epoll_events = libc::EPOLLIN;
             return epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
         }
         WriteResult::BufferFull => {
-            if tcp_socket.events == EPOLL_IN_OUT {
+            if tcp_socket.epoll_events == EPOLL_IN_OUT {
                 return Ok(());
             }
-            tcp_socket.events = EPOLL_IN_OUT;
+            tcp_socket.epoll_events = EPOLL_IN_OUT;
             return epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
         }
         WriteResult::Error(err) => return Err(err),

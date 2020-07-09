@@ -17,6 +17,3 @@ pub const HEAD_DATA_PID_POS: usize = 4;
 
 ///ext从头部数据从第6个字节开始获取
 pub const HEAD_DATA_EXT_POS: usize = 6;
-
-///客户最大数量
-pub const CONNECT_MAX_NUM: u16 = u16::MAX;

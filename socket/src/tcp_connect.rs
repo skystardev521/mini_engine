@@ -1,20 +1,20 @@
 use crate::tcp_socket::TcpSocket;
 
-pub struct TcpClient {
+pub struct TcpConnect {
     id: u8,
     /// 已重连次数
-    connect_count: u8,
+    reconnect_count: u8,
     socket_addr: String,
-    last_connect_timestamp: u64,
+    last_reconnect_timestamp: u64,
     tcp_socket_opt: Option<TcpSocket>,
 }
 
-impl TcpClient {
+impl TcpConnect {
     pub fn new(id: u8, socket_addr: &String, tcp_socket: Option<TcpSocket>) -> Self {
-        TcpClient {
+        TcpConnect {
             id,
-            connect_count: 0,
-            last_connect_timestamp: 0,
+            reconnect_count: 0,
+            last_reconnect_timestamp: 0,
             tcp_socket_opt: tcp_socket,
             socket_addr: socket_addr.clone(),
         }
@@ -30,8 +30,8 @@ impl TcpClient {
     }
 
     #[inline]
-    pub fn get_connect_count(&self) -> u8 {
-        self.connect_count
+    pub fn get_reconnect_count(&self) -> u8 {
+        self.reconnect_count
     }
     #[inline]
     pub fn get_tcp_socket_opt(&mut self) -> &mut Option<TcpSocket> {
@@ -43,7 +43,7 @@ impl TcpClient {
         self.tcp_socket_opt = tcp_socket_opt
     }
     #[inline]
-    pub fn get_last_connect_timestamp(&self) -> u64 {
-        self.last_connect_timestamp
+    pub fn get_last_reconnect_timestamp(&self) -> u64 {
+        self.last_reconnect_timestamp
     }
 }
