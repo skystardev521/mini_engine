@@ -30,10 +30,9 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
         let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
 
         let buffer = str.as_bytes();
-        let mut msg_num: u64 = 0;
         let mut msg_len = 100;
+        let mut msg_num: u64 = 0;
         loop {
-            msg_num += 1;
             msg_len += 1;
             if msg_len == str.len() {
                 msg_len = 100;
@@ -41,26 +40,34 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
             let mut data: Vec<u8> = vec![0u8; msg_len];
             data.copy_from_slice(&buffer[0..msg_len]);
 
-            let msg_data = Box::new(MsgData { id: 1, data: data });
+            let msg_data = Box::new(MsgData {
+                pid: 1,
+                ext: 0,
+                data: data,
+            });
 
             if let Err(err) = client.writer.add_msg_data(msg_data) {
                 info!("add_msg_data result err:{}", err);
             }
-            write(&mut client);
-            if msg_num % 200000 == 0 {
+            msg_num += 1;
+            if msg_num % 1000 == 0 {
                 info!("write data:{}", msg_num);
             }
+            write(&mut client);
         }
     })
 }
 
 fn write(client: &mut TcpSocket) {
+    //let mut msg_num: u64 = 0;
     loop {
         match client.writer.write(&mut client.socket) {
             WriteResult::Finish => {
                 //info!("write result:Finish");
                 thread::sleep(std::time::Duration::from_millis(5));
                 //return true; //
+
+                //info!("write data:{}", msg_num);
                 break;
             }
             WriteResult::BufferFull => {

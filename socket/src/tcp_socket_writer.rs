@@ -8,7 +8,7 @@ use std::net::TcpStream;
 use utils::bytes;
 
 pub struct TcpSocketWriter {
-    next_id: u16,
+    next_mid: u16,
     head_pos: usize,
     data_pos: usize,
     max_size: usize,
@@ -20,7 +20,7 @@ pub struct TcpSocketWriter {
 impl TcpSocketWriter {
     pub fn new(max_size: u32) -> Box<Self> {
         Box::new(TcpSocketWriter {
-            next_id: 0,
+            next_mid: 0,
             head_pos: 0,
             data_pos: 0,
             vec_deque: VecDeque::new(),
@@ -59,18 +59,22 @@ impl TcpSocketWriter {
                 self.is_write_finish_current_data = false;
                 //------------------encode head data start-----------------------------
                 let data_size = msg_data.data.len() as u32;
-                let size_and_id = (data_size << 12) + self.next_id as u32;
-                bytes::write_u32(&mut self.head_data[..], size_and_id);
+                let size_and_mid = (data_size << 12) + self.next_mid as u32;
+                bytes::write_u32(&mut self.head_data[..], size_and_mid);
                 bytes::write_u16(
-                    &mut self.head_data[tcp_socket_const::HEAD_DATA_ID_POS..],
-                    msg_data.id,
+                    &mut self.head_data[tcp_socket_const::HEAD_DATA_PID_POS..],
+                    msg_data.pid,
+                );
+                bytes::write_u32(
+                    &mut self.head_data[tcp_socket_const::HEAD_DATA_EXT_POS..],
+                    msg_data.ext,
                 );
                 //------------------encode head data end-----------------------------
 
-                if self.next_id == tcp_socket_const::MSG_MAX_ID {
-                    self.next_id = 0
+                if self.next_mid == tcp_socket_const::MSG_MAX_ID {
+                    self.next_mid = 0
                 } else {
-                    self.next_id += 1;
+                    self.next_mid += 1;
                 }
             }
 

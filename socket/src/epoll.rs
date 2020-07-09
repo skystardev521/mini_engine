@@ -2,6 +2,8 @@ use libc;
 use std::io::Error;
 use std::os::unix::io::RawFd;
 
+const EPOLL_EVENTS: i32 = (libc::EPOLLET | libc::EPOLLERR) as i32;
+
 #[derive(Debug)]
 pub struct Epoll {
     fd: libc::c_int,
@@ -33,7 +35,7 @@ impl Epoll {
     pub fn ctl_add_fd(&self, id: u64, fd: RawFd, ev: i32) -> Result<(), String> {
         let mut event = libc::epoll_event {
             u64: (id as libc::c_ulonglong),
-            events: (libc::EPOLLET | ev) as u32,
+            events: (EPOLL_EVENTS | ev) as u32,
         };
         unsafe {
             let ret = libc::epoll_ctl(self.fd, libc::EPOLL_CTL_ADD, fd, &mut event);
@@ -47,7 +49,7 @@ impl Epoll {
     pub fn ctl_mod_fd(&self, id: u64, fd: RawFd, ev: i32) -> Result<(), String> {
         let mut event = libc::epoll_event {
             u64: (id as libc::c_ulonglong),
-            events: (libc::EPOLLET | ev) as u32,
+            events: (EPOLL_EVENTS | ev) as u32,
         };
         unsafe {
             let ret = libc::epoll_ctl(self.fd, libc::EPOLL_CTL_MOD, fd, &mut event);

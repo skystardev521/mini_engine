@@ -1,6 +1,7 @@
 use log::error;
 use socket::message::NetMsg;
-use socket::tcp_server::TcpServer;
+use socket::message::ProtoId;
+use socket::tcp_listen_server::TcpListenServer;
 use socket::tcp_server_config::TcpServerConfig;
 use socket::tcp_server_config::TcpServerConfigBuilder;
 use std::sync::mpsc;
@@ -95,21 +96,23 @@ fn net_thread_run(
 ) {
     let mut net_msg_cb = |net_msg: NetMsg| {
         match sync_sender.try_send(net_msg) {
-            Ok(()) => {}
+            Ok(()) => return Ok(()),
             Err(TrySendError::Full(_)) => {
-                //error!("net_thread try_send Full");
+                error!("net_thread try_send Full");
+                return Err(ProtoId::BusyServer);
             }
             Err(TrySendError::Disconnected(_)) => {
                 error!("net_thread try_send Disconnected");
+                return Err(ProtoId::ExceptionServer);
             }
         };
     };
 
-    let mut tcp_server: TcpServer;
-    match TcpServer::new(&config, &mut net_msg_cb) {
-        Ok(server) => tcp_server = server,
+    let mut tcp_listen_server: TcpListenServer;
+    match TcpListenServer::new(&config, &mut net_msg_cb) {
+        Ok(server) => tcp_listen_server = server,
         Err(err) => {
-            error!("TcpServer::new error:{}", err);
+            error!("TcpListenServer::new error:{}", err);
             return;
         }
     }
@@ -118,9 +121,9 @@ fn net_thread_run(
     let mut epoll_wait_timeout = 0;
 
     loop {
-        tcp_server.tick();
+        tcp_listen_server.tick();
 
-        match tcp_server.epoll_event(epoll_wait_timeout) {
+        match tcp_listen_server.epoll_event(epoll_wait_timeout) {
             Ok(0) => epoll_wait_timeout = 1,
             Ok(num) => {
                 if num == config.epoll_max_events {
@@ -128,7 +131,7 @@ fn net_thread_run(
                 }
             }
             Err(err) => {
-                error!("tcp_server wait_socket_event:{}", err);
+                error!("TcpListenServer epoll_event:{}", err);
                 break;
             }
         }
@@ -138,7 +141,9 @@ fn net_thread_run(
 
             match receiver.try_recv() {
                 Ok(net_msg) => {
-                    tcp_server.write_net_msg(net_msg);
+                    //这里要优化 判断是否广播消息，广告
+                    tcp_listen_server.write_net_msg(net_msg);
+
                     single_write_msg_count += 1;
                     if single_write_msg_count == config.single_write_msg_max_num {
                         epoll_wait_timeout = 0;

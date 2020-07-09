@@ -2,10 +2,7 @@
 use utils::logger::Logger;
 //use utils::time;
 pub mod test_tcp;
-
 use std::io::prelude::*;
-use std::net::TcpStream;
-use utils::time;
 
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,
@@ -32,5 +29,5 @@ fn main() {
         }
     */
 
-    let mut hm: std::collections::HashMap<&str, i32> = std::collections::HashMap::new();
+    //let mut hm: std::collections::HashMap<&str, i32> = std::collections::HashMap::new();
 }

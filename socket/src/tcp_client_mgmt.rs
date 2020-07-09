@@ -1,3 +1,4 @@
+/*
 use crate::message::NetMsg;
 use crate::tcp_client::TcpClient;
 use crate::tcp_client_config::TcpClientConfig;
@@ -191,3 +192,4 @@ fn write(tcp_socket: &mut TcpSocket) -> Result<(), String> {
         WriteResult::Error(err) => Err(err),
     }
 }
+*/

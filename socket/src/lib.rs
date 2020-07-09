@@ -1,10 +1,10 @@
 pub mod epoll;
 pub mod message;
-pub mod tcp_client;
-pub mod tcp_client_config;
 pub mod tcp_client_mgmt;
-mod tcp_listen;
-pub mod tcp_server;
+pub mod tcp_connect;
+pub mod tcp_connect_config;
+pub mod tcp_listen;
+pub mod tcp_listen_server;
 pub mod tcp_server_config;
 pub mod tcp_socket;
 pub mod tcp_socket_const;

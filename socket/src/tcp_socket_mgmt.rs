@@ -4,10 +4,12 @@ use std::collections::HashMap;
 use std::net::TcpStream;
 
 pub struct TcpSocketMgmt {
-    next_id: u64,
+    //不会等于零
+    next_sid: u64,
     listen_id: u64,
     msg_max_size: u32,
     wait_write_msg_max_num: u16,
+    /// 可以优化使用别的数据结构
     tcp_socket_hash_map: HashMap<u64, TcpSocket>,
 }
 
@@ -20,7 +22,7 @@ impl TcpSocketMgmt {
         msg_max_size: u32,
         wait_write_msg_max_num: u16,
     ) -> Result<Self, String> {
-        if max_socket < 8 {
+        if max_socket < 1 {
             return Err("socket Too Small".into());
         }
 
@@ -29,7 +31,7 @@ impl TcpSocketMgmt {
         }
 
         Ok(TcpSocketMgmt {
-            next_id: 0,
+            next_sid: 0,
             listen_id: listen_id,
             msg_max_size: msg_max_size,
             wait_write_msg_max_num: wait_write_msg_max_num,
@@ -48,16 +50,16 @@ impl TcpSocketMgmt {
     }
 
     #[inline]
-    pub fn get_tcp_socket(&mut self, id: u64) -> Option<&mut TcpSocket> {
-        self.tcp_socket_hash_map.get_mut(&id)
+    pub fn get_tcp_socket(&mut self, sid: u64) -> Option<&mut TcpSocket> {
+        self.tcp_socket_hash_map.get_mut(&sid)
     }
 
     #[inline]
-    pub fn del_socket(&mut self, id: u64) -> Result<TcpSocket, String> {
-        if let Some(tcp_socket) = self.tcp_socket_hash_map.remove(&id) {
+    pub fn del_socket(&mut self, sid: u64) -> Result<TcpSocket, String> {
+        if let Some(tcp_socket) = self.tcp_socket_hash_map.remove(&sid) {
             Ok(tcp_socket)
         } else {
-            Err(format!("del_client id:{} not exists", id))
+            Err(format!("del_client id:{} not exists", sid))
         }
     }
 
@@ -65,17 +67,26 @@ impl TcpSocketMgmt {
         if self.tcp_socket_hash_map.len() == self.tcp_socket_hash_map.capacity() {
             return Err("Max Socket Number".into());
         }
-        loop {
-            self.next_id += 1;
-            if self.next_id == self.listen_id {
-                self.next_id = self.listen_id + 1;
-            }
-            if !(self.tcp_socket_hash_map.contains_key(&self.next_id)) {
-                break;
-            }
-        }
+        self.next_sid = self.next_sid();
         self.tcp_socket_hash_map
-            .insert(self.next_id, TcpSocket::new(socket, self.msg_max_size));
-        Ok(self.next_id)
+            .insert(self.next_sid, TcpSocket::new(socket, self.msg_max_size));
+        Ok(self.next_sid)
+    }
+
+    fn next_sid(&self) -> u64 {
+        let mut sid = self.next_sid;
+        loop {
+            sid += 1;
+            if sid == 0 {
+                sid = 1;
+            }
+            if sid == self.listen_id {
+                sid += 1;
+            }
+            if self.tcp_socket_hash_map.contains_key(&sid) {
+                continue;
+            }
+            return sid;
+        }
     }
 }

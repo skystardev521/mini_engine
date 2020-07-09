@@ -2,7 +2,6 @@ use crate::epoll::Epoll;
 use crate::message::MsgData;
 use crate::message::MsgDataId;
 use crate::message::NetMsg;
-use crate::tcp_listen::TcpListen;
 use crate::tcp_server_config::TcpServerConfig;
 use crate::tcp_socket::ReadResult;
 use crate::tcp_socket::WriteResult;
@@ -22,35 +21,26 @@ use crate::tcp_socket::TcpSocket;
 const TCP_LISTEN_ID: u64 = 0;
 const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
-pub struct TcpServer<'a> {
+pub struct TcpConnectServer<'a> {
     epoll: Epoll,
-    tcp_listen: TcpListen,
     tcp_socket_mgmt: TcpSocketMgmt,
     net_msg_cb: &'a mut dyn Fn(NetMsg),
     vec_epoll_event: Vec<libc::epoll_event>,
 }
 
-impl<'a> Drop for TcpServer<'a> {
+impl<'a> Drop for TcpConnectServer<'a> {
     fn drop(&mut self) {
         if thread::panicking() {
-            error!("dropped TcpServer while unwinding");
+            error!("dropped TcpConnectServer while unwinding");
         } else {
-            error!("dropped TcpServer while not unwinding");
+            error!("dropped TcpConnectServer while not unwinding");
         }
     }
 }
 
-impl<'a> TcpServer<'a> {
+impl<'a> TcpConnectServer<'a> {
     pub fn new(cfg: &TcpServerConfig, net_msg_cb: &'a mut dyn Fn(NetMsg)) -> Result<Self, String> {
         let epoll: Epoll = Epoll::new()?;
-
-        let tcp_listen = TcpListen::new(&cfg.bind_socket_addr)?;
-        epoll.ctl_add_fd(
-            TCP_LISTEN_ID,
-            tcp_listen.get_listen().as_raw_fd(),
-            libc::EPOLLIN,
-        )?;
-
         let tcp_socket_mgmt = TcpSocketMgmt::new(
             TCP_LISTEN_ID,
             cfg.max_socket,
@@ -58,9 +48,8 @@ impl<'a> TcpServer<'a> {
             cfg.wait_write_msg_max_num,
         )?;
 
-        Ok(TcpServer {
+        Ok(TcpConnectServer {
             epoll,
-            tcp_listen,
             net_msg_cb,
             tcp_socket_mgmt,
             vec_epoll_event: vec![
@@ -79,11 +68,6 @@ impl<'a> TcpServer<'a> {
             Ok(num) => {
                 for n in 0..num as usize {
                     let event = self.vec_epoll_event[n];
-                    if event.u64 == TCP_LISTEN_ID {
-                        self.accept_event();
-                        continue;
-                    }
-
                     if (event.events & libc::EPOLLIN as u32) != 0 {
                         self.read_event(event.u64);
                     }
@@ -101,7 +85,6 @@ impl<'a> TcpServer<'a> {
     }
 
     fn read_event(&mut self, id: u64) {
-        //info!("read id:{}", id);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(id) {
             loop {
                 match tcp_socket.reader.read(&mut tcp_socket.socket) {
@@ -176,18 +159,6 @@ impl<'a> TcpServer<'a> {
         warn!("epoll event error:{}", err);
     }
 
-    fn accept_event(&mut self) {
-        loop {
-            match self.tcp_listen.get_listen().accept() {
-                Ok((socket, _)) => {
-                    self.new_socket(socket);
-                }
-                Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
-                Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
-                Err(ref err) => error!("tcp listen accept() error:{}", err),
-            }
-        }
-    }
     fn new_socket(&mut self, socket: TcpStream) {
         match socket.set_nonblocking(true) {
             Ok(()) => {
@@ -217,6 +188,7 @@ impl<'a> TcpServer<'a> {
             }
         }
     }
+
     fn del_socket(&mut self, id: u64) {
         match self.tcp_socket_mgmt.del_socket(id) {
             Ok(tcp_socket) => {
@@ -226,8 +198,9 @@ impl<'a> TcpServer<'a> {
                 (self.net_msg_cb)(NetMsg {
                     id: id,
                     data: Box::new(MsgData {
-                        id: MsgDataId::SocketClose as u16,
+                        ext: 0,
                         data: vec![],
+                        pid: MsgDataId::SocketClose as u16,
                     }),
                 });
             }
