@@ -8,16 +8,19 @@ use crate::tcp_socket::ReadResult;
 use crate::tcp_socket::WriteResult;
 use crate::tcp_socket_mgmt::TcpSocketMgmt;
 use libc;
-use log::{error, info, warn};
+use log::{error, warn};
 use std::io::Error;
 use std::io::ErrorKind;
 use std::net::Shutdown;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
-use std::os::unix::io::RawFd;
+
 use std::thread;
 
+use crate::tcp_socket::TcpSocket;
+
 const TCP_LISTEN_ID: u64 = 0;
+const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
 pub struct TcpServer<'a> {
     epoll: Epoll,
@@ -77,18 +80,18 @@ impl<'a> TcpServer<'a> {
                 for n in 0..num as usize {
                     let event = self.vec_epoll_event[n];
                     if event.u64 == TCP_LISTEN_ID {
-                        self.accept();
+                        self.accept_event();
                         continue;
                     }
 
                     if (event.events & libc::EPOLLIN as u32) != 0 {
-                        self.read(event.u64);
+                        self.read_event(event.u64);
                     }
                     if (event.events & libc::EPOLLOUT as u32) != 0 {
-                        self.write(event.u64);
+                        self.write_event(event.u64);
                     }
                     if (event.events & libc::EPOLLERR as u32) != 0 {
-                        self.error(event.u64, Error::last_os_error().to_string());
+                        self.error_event(event.u64, Error::last_os_error().to_string());
                     }
                 }
                 return Ok(num as u16);
@@ -97,7 +100,7 @@ impl<'a> TcpServer<'a> {
         }
     }
 
-    fn read(&mut self, id: u64) {
+    fn read_event(&mut self, id: u64) {
         //info!("read id:{}", id);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(id) {
             loop {
@@ -123,6 +126,8 @@ impl<'a> TcpServer<'a> {
                     }
                 }
             }
+        } else {
+            warn!("read_event tcp_socket_mgmt id no exitis:{}", id);
         }
     }
 
@@ -143,9 +148,10 @@ impl<'a> TcpServer<'a> {
                     }
                 }
                 if tcp_socket.writer.get_msg_data_count() == 1 {
-                    let result = tcp_socket.writer.write(&mut tcp_socket.socket);
-                    let rawfd = tcp_socket.socket.as_raw_fd();
-                    self.write_result_handle(net_msg.id, rawfd, &result);
+                    if let Err(err) = write_data(&self.epoll, net_msg.id, tcp_socket) {
+                        self.del_socket(net_msg.id);
+                        warn!("tcp_socket.writer.write err:{}", err);
+                    }
                 }
             }
             None => {
@@ -154,53 +160,27 @@ impl<'a> TcpServer<'a> {
         }
     }
 
-    fn write(&mut self, id: u64) {
+    fn write_event(&mut self, id: u64) {
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(id) {
-            let result = tcp_socket.writer.write(&mut tcp_socket.socket);
-            let rawfd = tcp_socket.socket.as_raw_fd();
-            self.write_result_handle(id, rawfd, &result);
-        } else {
-            warn!("write tcp_socket_mgmt id no exitis:{}", id);
-        }
-    }
-
-    #[inline]
-    fn write_result_handle(&mut self, id: u64, rawfd: RawFd, write_result: &WriteResult) {
-        match write_result {
-            WriteResult::Finish => (),
-            WriteResult::BufferFull => self.write_full_handle(id, rawfd),
-            WriteResult::Error(err) => {
+            if let Err(err) = write_data(&self.epoll, id, tcp_socket) {
                 self.del_socket(id);
                 warn!("tcp_socket.writer.write err:{}", err);
             }
+        } else {
+            warn!("write_event tcp_socket_mgmt id no exitis:{}", id);
         }
     }
 
-    #[inline]
-    fn write_full_handle(&mut self, id: u64, rawfd: RawFd) {
-        match self
-            .epoll
-            .ctl_mod_fd(id, rawfd, (libc::EPOLLOUT | libc::EPOLLIN) as i32)
-        {
-            Ok(()) => (),
-            Err(err) => {
-                self.del_socket(id);
-                warn!("tcp_socket.writer.write epoll.ctl_mod_fd err:{}", err);
-            }
-        }
-    }
-
-    fn error(&mut self, id: u64, err: String) {
+    fn error_event(&mut self, id: u64, err: String) {
         self.del_socket(id);
         warn!("epoll event error:{}", err);
     }
 
-    fn accept(&mut self) {
+    fn accept_event(&mut self) {
         loop {
             match self.tcp_listen.get_listen().accept() {
                 Ok((socket, _)) => {
                     self.new_socket(socket);
-                    //info!("new connect");
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
@@ -238,7 +218,6 @@ impl<'a> TcpServer<'a> {
         }
     }
     fn del_socket(&mut self, id: u64) {
-        info!("del_socket id:{}", id);
         match self.tcp_socket_mgmt.del_socket(id) {
             Ok(tcp_socket) => {
                 if let Err(err) = self.epoll.ctl_del_fd(id, tcp_socket.socket.as_raw_fd()) {
@@ -256,5 +235,25 @@ impl<'a> TcpServer<'a> {
                 warn!("tcp_socket_mgmt.del_socket({}) Error:{}", id, err);
             }
         }
+    }
+}
+
+fn write_data(epoll: &Epoll, id: u64, tcp_socket: &mut TcpSocket) -> Result<(), String> {
+    match tcp_socket.writer.write(&mut tcp_socket.socket) {
+        WriteResult::Finish => {
+            if tcp_socket.events == libc::EPOLLIN {
+                return Ok(());
+            }
+            tcp_socket.events = libc::EPOLLIN;
+            return epoll.ctl_mod_fd(id, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
+        }
+        WriteResult::BufferFull => {
+            if tcp_socket.events == EPOLL_IN_OUT {
+                return Ok(());
+            }
+            tcp_socket.events = EPOLL_IN_OUT;
+            return epoll.ctl_mod_fd(id, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
+        }
+        WriteResult::Error(err) => return Err(err),
     }
 }

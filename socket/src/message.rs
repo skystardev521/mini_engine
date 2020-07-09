@@ -23,5 +23,8 @@ pub enum MsgDataId {
     /// 网络已断开
     SocketClose = 2,
 
+    /// 服务繁忙
+    /// Busy service
+
     IdMaxValue = 255,
 }

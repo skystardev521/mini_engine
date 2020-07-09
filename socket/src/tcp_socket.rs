@@ -18,6 +18,7 @@ pub enum WriteResult {
 }
 
 pub struct TcpSocket {
+    pub events: i32,
     pub socket: TcpStream,
     pub reader: Box<TcpSocketReader>,
     pub writer: Box<TcpSocketWriter>,
@@ -26,6 +27,7 @@ pub struct TcpSocket {
 impl TcpSocket {
     pub fn new(socket: TcpStream, max_size: u32) -> Self {
         TcpSocket {
+            events: 0,
             socket: socket,
             reader: TcpSocketReader::new(max_size),
             writer: TcpSocketWriter::new(max_size),
