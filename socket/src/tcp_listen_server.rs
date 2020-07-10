@@ -3,7 +3,7 @@ use crate::message::MsgData;
 use crate::message::NetMsg;
 use crate::message::ProtoId;
 use crate::tcp_listen::TcpListen;
-use crate::tcp_server_config::TcpServerConfig;
+use crate::tcp_listen_config::TcpListenConfig;
 use crate::tcp_socket::ReadResult;
 use crate::tcp_socket::WriteResult;
 use crate::tcp_socket_mgmt::TcpSocketMgmt;
@@ -42,7 +42,7 @@ impl<'a> Drop for TcpListenServer<'a> {
 
 impl<'a> TcpListenServer<'a> {
     pub fn new(
-        cfg: &TcpServerConfig,
+        cfg: &TcpListenConfig,
         net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
     ) -> Result<Self, String> {
         let epoll: Epoll = Epoll::new()?;
@@ -56,8 +56,8 @@ impl<'a> TcpListenServer<'a> {
 
         let tcp_socket_mgmt = TcpSocketMgmt::new(
             TCP_LISTEN_ID,
-            cfg.max_socket,
             cfg.msg_max_size,
+            cfg.max_tcp_socket,
             cfg.wait_write_msg_max_num,
         )?;
 
@@ -124,18 +124,19 @@ impl<'a> TcpListenServer<'a> {
                         break;
                     }
                     ReadResult::ReadZeroSize => {
-                        self.del_socket(sid);
+                        self.del_tcp_socket(sid, true);
                         warn!("tcp_socket.reader.read :{}", "Read Zero Size");
                         break;
                     }
                     ReadResult::Error(err) => {
-                        self.del_socket(sid);
+                        self.del_tcp_socket(sid, true);
                         error!("tcp_socket.reader.read id:{} err:{}", sid, err);
                         break;
                     }
                 }
             }
             if let Some(pid) = msg_cb_err_reason {
+                //发送到客户端表示系统异常
                 self.write_net_msg(NetMsg {
                     sid: sid,
                     data: Box::new(MsgData {
@@ -156,7 +157,7 @@ impl<'a> TcpListenServer<'a> {
         match self.tcp_socket_mgmt.get_tcp_socket(net_msg.sid) {
             Some(tcp_socket) => {
                 if tcp_socket.writer.get_msg_data_count() > msg_max_num {
-                    self.del_socket(net_msg.sid);
+                    self.del_tcp_socket(net_msg.sid, true);
                     warn!("net_msg.id:{} Too much msg_data not send", net_msg.sid);
                     return;
                 }
@@ -168,13 +169,14 @@ impl<'a> TcpListenServer<'a> {
                 }
                 if tcp_socket.writer.get_msg_data_count() == 1 {
                     if let Err(err) = write_data(&self.epoll, net_msg.sid, tcp_socket) {
-                        self.del_socket(net_msg.sid);
+                        self.del_tcp_socket(net_msg.sid, true);
                         warn!("tcp_socket.writer.write err:{}", err);
                     }
                 }
             }
             None => {
-                warn!("net_msg.id no exitis:{}", net_msg.sid);
+                self.tcp_socket_close_cb(net_msg.sid);
+                warn!("write_net_msg net_msg.id no exitis:{}", net_msg.sid);
             }
         }
     }
@@ -182,7 +184,7 @@ impl<'a> TcpListenServer<'a> {
     fn write_event(&mut self, sid: u64) {
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
             if let Err(err) = write_data(&self.epoll, sid, tcp_socket) {
-                self.del_socket(sid);
+                self.del_tcp_socket(sid, true);
                 warn!("tcp_socket.writer.write err:{}", err);
             }
         } else {
@@ -191,7 +193,7 @@ impl<'a> TcpListenServer<'a> {
     }
 
     fn error_event(&mut self, sid: u64, err: String) {
-        self.del_socket(sid);
+        self.del_tcp_socket(sid, true);
         warn!("epoll event error:{}", err);
     }
 
@@ -212,7 +214,7 @@ impl<'a> TcpListenServer<'a> {
         match socket.set_nonblocking(true) {
             Ok(()) => {
                 let raw_fd = socket.as_raw_fd();
-                match self.tcp_socket_mgmt.new_socket(socket) {
+                match self.tcp_socket_mgmt.add_tcp_socket(socket) {
                     Ok(sid) => {
                         match self.epoll.ctl_add_fd(sid, raw_fd, libc::EPOLLIN) {
                             Ok(()) => (),
@@ -237,23 +239,35 @@ impl<'a> TcpListenServer<'a> {
             }
         }
     }
-    fn del_socket(&mut self, sid: u64) {
-        match self.tcp_socket_mgmt.del_socket(sid) {
+    /// is_del_cb:删除后是不是回调到业务层
+    fn del_tcp_socket(&mut self, sid: u64, is_del_cb: bool) {
+        match self.tcp_socket_mgmt.del_tcp_socket(sid) {
             Ok(tcp_socket) => {
                 if let Err(err) = self.epoll.ctl_del_fd(sid, tcp_socket.socket.as_raw_fd()) {
                     warn!("epoll.ctl_del_fd({}) Error:{}", sid, err);
                 }
-                (self.net_msg_cb)(NetMsg {
-                    sid: sid,
-                    data: Box::new(MsgData {
-                        ext: 0,
-                        data: vec![],
-                        pid: ProtoId::SocketClose as u16,
-                    }),
-                });
+                if is_del_cb {
+                    self.tcp_socket_close_cb(sid);
+                }
             }
             Err(err) => {
-                warn!("tcp_socket_mgmt.del_socket({}) Error:{}", sid, err);
+                warn!("tcp_socket_mgmt.del_tcp_socket({}) Error:{}", sid, err);
+            }
+        }
+    }
+
+    fn tcp_socket_close_cb(&mut self, sid: u64) {
+        match (self.net_msg_cb)(NetMsg {
+            sid: sid,
+            data: Box::new(MsgData {
+                ext: 0,
+                data: vec![],
+                pid: ProtoId::SocketClose as u16,
+            }),
+        }) {
+            Ok(()) => (),
+            Err(pid) => {
+                warn!("tcp_socket_close_cb ({}) net_msg_cb return :{:?}", sid, pid);
             }
         }
     }

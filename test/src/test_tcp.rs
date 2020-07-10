@@ -94,7 +94,7 @@ fn read(client: &mut TcpSocket) {
     let mut msg_num: u64 = 0;
     loop {
         match client.reader.read(&mut client.socket) {
-            ReadResult::Data(msg_data) => {
+            ReadResult::Data(_msg_data) => {
                 /*
                 info!(
                     "read id:{} data:{:?}",

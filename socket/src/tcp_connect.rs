@@ -1,7 +1,7 @@
 use crate::tcp_socket::TcpSocket;
 
 pub struct TcpConnect {
-    id: u8,
+    id: u64,
     /// 已重连次数
     reconnect_count: u8,
     socket_addr: String,
@@ -10,7 +10,7 @@ pub struct TcpConnect {
 }
 
 impl TcpConnect {
-    pub fn new(id: u8, socket_addr: &String, tcp_socket: Option<TcpSocket>) -> Self {
+    pub fn new(id: u64, socket_addr: &String, tcp_socket: Option<TcpSocket>) -> Self {
         TcpConnect {
             id,
             reconnect_count: 0,
@@ -20,7 +20,7 @@ impl TcpConnect {
         }
     }
     #[inline]
-    pub fn get_id(&self) -> u8 {
+    pub fn get_id(&self) -> u64 {
         self.id
     }
 

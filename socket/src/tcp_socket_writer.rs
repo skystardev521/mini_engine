@@ -1,6 +1,6 @@
+use crate::message;
 use crate::message::MsgData;
 use crate::tcp_socket::WriteResult;
-use crate::tcp_socket_const;
 use std::collections::VecDeque;
 use std::io::prelude::Write;
 use std::io::ErrorKind;
@@ -14,7 +14,7 @@ pub struct TcpSocketWriter {
     max_size: usize,
     vec_deque: VecDeque<Box<MsgData>>,
     is_write_finish_current_data: bool,
-    head_data: [u8; tcp_socket_const::MSG_HEAD_SIZE],
+    head_data: [u8; message::MSG_HEAD_SIZE],
 }
 
 impl TcpSocketWriter {
@@ -25,9 +25,9 @@ impl TcpSocketWriter {
             data_pos: 0,
             vec_deque: VecDeque::new(),
             is_write_finish_current_data: true,
-            head_data: [0u8; tcp_socket_const::MSG_HEAD_SIZE],
-            max_size: if max_size > tcp_socket_const::MSG_MAX_SIZE {
-                tcp_socket_const::MSG_MAX_SIZE
+            head_data: [0u8; message::MSG_HEAD_SIZE],
+            max_size: if max_size > message::MSG_MAX_SIZE {
+                message::MSG_MAX_SIZE
             } else {
                 max_size
             } as usize,
@@ -62,16 +62,16 @@ impl TcpSocketWriter {
                 let size_and_mid = (data_size << 12) + self.next_mid as u32;
                 bytes::write_u32(&mut self.head_data[..], size_and_mid);
                 bytes::write_u16(
-                    &mut self.head_data[tcp_socket_const::HEAD_DATA_PID_POS..],
+                    &mut self.head_data[message::HEAD_DATA_PID_POS..],
                     msg_data.pid,
                 );
                 bytes::write_u32(
-                    &mut self.head_data[tcp_socket_const::HEAD_DATA_EXT_POS..],
+                    &mut self.head_data[message::HEAD_DATA_EXT_POS..],
                     msg_data.ext,
                 );
                 //------------------encode head data end-----------------------------
 
-                if self.next_mid == tcp_socket_const::MSG_MAX_ID {
+                if self.next_mid == message::MSG_MAX_ID {
                     self.next_mid = 0
                 } else {
                     self.next_mid += 1;
@@ -79,7 +79,7 @@ impl TcpSocketWriter {
             }
 
             // write head data
-            if self.head_pos < tcp_socket_const::MSG_HEAD_SIZE {
+            if self.head_pos < message::MSG_HEAD_SIZE {
                 loop {
                     match socket.write(&self.head_data[self.head_pos..]) {
                         Ok(0) => {
@@ -88,7 +88,7 @@ impl TcpSocketWriter {
                         }
                         Ok(size) => {
                             self.head_pos += size;
-                            if self.head_pos == tcp_socket_const::MSG_HEAD_SIZE {
+                            if self.head_pos == message::MSG_HEAD_SIZE {
                                 //已写完 head_data
                                 if msg_data.data.len() > 0 {
                                     break;

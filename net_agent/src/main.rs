@@ -1,9 +1,9 @@
 use log::error;
 use socket::message::NetMsg;
 use socket::message::ProtoId;
+use socket::tcp_listen_config::TcpListenConfig;
+use socket::tcp_listen_config::TcpListenConfigBuilder;
 use socket::tcp_listen_server::TcpListenServer;
-use socket::tcp_server_config::TcpServerConfig;
-use socket::tcp_server_config::TcpServerConfigBuilder;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -30,7 +30,7 @@ fn main() {
         Err(err) => println!("Logger::init error:{}", err),
     }
 
-    let tcp_server_confg: TcpServerConfig;
+    let tcp_server_confg: TcpListenConfig;
     match read_tcp_server_config("tcp_server_confg.txt".into()) {
         Ok(config) => tcp_server_confg = config,
         Err(err) => {
@@ -77,8 +77,8 @@ fn main() {
     }
 }
 
-fn read_tcp_server_config(_path: String) -> Result<TcpServerConfig, String> {
-    let config_builder = TcpServerConfigBuilder::new();
+fn read_tcp_server_config(_path: String) -> Result<TcpListenConfig, String> {
+    let config_builder = TcpListenConfigBuilder::new();
     let config = config_builder.builder();
     Ok(config)
 }
@@ -90,7 +90,7 @@ fn read_server_config(_path: String) -> Result<Config, String> {
 }
 
 fn net_thread_run(
-    config: &TcpServerConfig,
+    config: &TcpListenConfig,
     receiver: Receiver<NetMsg>,
     sync_sender: SyncSender<NetMsg>,
 ) {
@@ -162,15 +162,15 @@ fn net_thread_run(
 }
 
 fn agent_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: SyncSender<NetMsg>) {
-    let mut net_msg_cb = |net_msg: NetMsg| {
-        match sync_sender.try_send(net_msg) {
-            Ok(()) => (), //return true,
-            Err(TrySendError::Full(_)) => {
-                //error!("agent_thread try_send Full");
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                error!("agent_thread try_send Disconnected");
-            }
+    let mut net_msg_cb = |net_msg: NetMsg| match sync_sender.try_send(net_msg) {
+        Ok(()) => return Ok(()),
+        Err(TrySendError::Full(_)) => {
+            error!("net_thread try_send Full");
+            return Err(ProtoId::BusyServer);
+        }
+        Err(TrySendError::Disconnected(_)) => {
+            error!("net_thread try_send Disconnected");
+            return Err(ProtoId::ExceptionServer);
         }
     };
     let mut server = Server::new(&config, &mut net_msg_cb);

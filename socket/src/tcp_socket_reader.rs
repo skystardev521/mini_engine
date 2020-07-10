@@ -1,6 +1,6 @@
+use crate::message;
 use crate::message::MsgData;
 use crate::tcp_socket::ReadResult;
-use crate::tcp_socket_const;
 use std::io::prelude::Read;
 use std::io::ErrorKind;
 use std::mem;
@@ -14,7 +14,7 @@ pub struct TcpSocketReader {
     head_pos: usize,
     data_pos: usize,
     msg_data: Box<MsgData>,
-    head_data: [u8; tcp_socket_const::MSG_HEAD_SIZE],
+    head_data: [u8; message::MSG_HEAD_SIZE],
 }
 
 impl TcpSocketReader {
@@ -24,14 +24,14 @@ impl TcpSocketReader {
             next_mid: 0,
             head_pos: 0,
             data_pos: 0,
-            head_data: [0u8; tcp_socket_const::MSG_HEAD_SIZE],
+            head_data: [0u8; message::MSG_HEAD_SIZE],
             msg_data: Box::new(MsgData {
                 pid: 0,
                 ext: 0,
                 data: vec![],
             }),
-            max_size: if max_size > tcp_socket_const::MSG_MAX_SIZE {
-                tcp_socket_const::MSG_MAX_SIZE
+            max_size: if max_size > message::MSG_MAX_SIZE {
+                message::MSG_MAX_SIZE
             } else {
                 max_size
             },
@@ -39,22 +39,20 @@ impl TcpSocketReader {
     }
 
     pub fn read(&mut self, socket: &mut TcpStream) -> ReadResult {
-        if self.head_pos != tcp_socket_const::MSG_HEAD_SIZE {
+        if self.head_pos != message::MSG_HEAD_SIZE {
             loop {
                 match socket.read(&mut self.head_data[self.head_pos..]) {
                     Ok(0) => return ReadResult::ReadZeroSize,
                     Ok(size) => {
                         self.head_pos += size;
                         //读取到的字节数
-                        if self.head_pos == tcp_socket_const::MSG_HEAD_SIZE {
+                        if self.head_pos == message::MSG_HEAD_SIZE {
                             //--------------------decode msg head start-----------------
                             let new_data = bytes::read_u32(&self.head_data);
-                            let pid = bytes::read_u16(
-                                &self.head_data[tcp_socket_const::HEAD_DATA_PID_POS..],
-                            );
-                            let ext = bytes::read_u32(
-                                &self.head_data[tcp_socket_const::HEAD_DATA_EXT_POS..],
-                            );
+                            let pid =
+                                bytes::read_u16(&self.head_data[message::HEAD_DATA_PID_POS..]);
+                            let ext =
+                                bytes::read_u32(&self.head_data[message::HEAD_DATA_EXT_POS..]);
 
                             let new_mid = (new_data << 20 >> 20) as u16;
                             let new_data_size = (new_data >> 12) as u32;
@@ -71,7 +69,7 @@ impl TcpSocketReader {
                                 ));
                             }
 
-                            if self.next_mid == tcp_socket_const::MSG_MAX_ID {
+                            if self.next_mid == message::MSG_MAX_ID {
                                 self.next_mid = 0;
                             } else {
                                 self.next_mid += 1;

@@ -1,5 +1,5 @@
+use crate::message;
 use crate::tcp_socket::TcpSocket;
-use crate::tcp_socket_const;
 use std::collections::HashMap;
 use std::net::TcpStream;
 
@@ -26,7 +26,7 @@ impl TcpSocketMgmt {
             return Err("socket Too Small".into());
         }
 
-        if max_socket > tcp_socket_const::MSG_MAX_SIZE {
+        if msg_max_size > message::MSG_MAX_SIZE {
             return Err("msg size too big".into());
         }
 
@@ -37,6 +37,23 @@ impl TcpSocketMgmt {
             wait_write_msg_max_num: wait_write_msg_max_num,
             tcp_socket_hash_map: HashMap::with_capacity(max_socket as usize),
         })
+    }
+
+    fn next_sid(&self) -> u64 {
+        let mut sid = self.next_sid;
+        loop {
+            sid += 1;
+            if sid == 0 {
+                sid = 1;
+            }
+            if sid == self.listen_id {
+                sid += 1;
+            }
+            if self.tcp_socket_hash_map.contains_key(&sid) {
+                continue;
+            }
+            return sid;
+        }
     }
 
     #[inline]
@@ -55,7 +72,7 @@ impl TcpSocketMgmt {
     }
 
     #[inline]
-    pub fn del_socket(&mut self, sid: u64) -> Result<TcpSocket, String> {
+    pub fn del_tcp_socket(&mut self, sid: u64) -> Result<TcpSocket, String> {
         if let Some(tcp_socket) = self.tcp_socket_hash_map.remove(&sid) {
             Ok(tcp_socket)
         } else {
@@ -63,7 +80,7 @@ impl TcpSocketMgmt {
         }
     }
 
-    pub fn new_socket(&mut self, socket: TcpStream) -> Result<u64, String> {
+    pub fn add_tcp_socket(&mut self, socket: TcpStream) -> Result<u64, String> {
         if self.tcp_socket_hash_map.len() == self.tcp_socket_hash_map.capacity() {
             return Err("Max Socket Number".into());
         }
@@ -71,22 +88,5 @@ impl TcpSocketMgmt {
         self.tcp_socket_hash_map
             .insert(self.next_sid, TcpSocket::new(socket, self.msg_max_size));
         Ok(self.next_sid)
-    }
-
-    fn next_sid(&self) -> u64 {
-        let mut sid = self.next_sid;
-        loop {
-            sid += 1;
-            if sid == 0 {
-                sid = 1;
-            }
-            if sid == self.listen_id {
-                sid += 1;
-            }
-            if self.tcp_socket_hash_map.contains_key(&sid) {
-                continue;
-            }
-            return sid;
-        }
     }
 }
