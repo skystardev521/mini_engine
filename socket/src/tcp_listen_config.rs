@@ -33,10 +33,10 @@ impl TcpListenConfigBuilder {
             max_tcp_socket: 10240,
             epoll_max_events: 256,
             epoll_wait_timeout: 1,
-            socket_read_buffer: 4,
-            socket_write_buffer: 4,
+            socket_read_buffer: 8192,
+            socket_write_buffer: 8192,
             tcp_nodelay_value: false,
-            wait_write_msg_max_num: 1280,
+            wait_write_msg_max_num: 128,
             single_write_msg_max_num: 256,
             bind_socket_addr: "0.0.0.0:9999".into(),
         }

@@ -2,7 +2,7 @@
 pub struct TcpConnectConfig {
     /// 网络消息最大字节
     pub msg_max_size: u32,
-    /// epoll 触发最大事件数
+    /// os_epoll 触发最大事件数
     pub epoll_max_events: u16,
     /// 是否tcp不缓存有数据就发送
     pub tcp_nodelay_value: bool,
@@ -42,13 +42,13 @@ impl TcpConnectConfigBuilder {
             msg_max_size: 1024 * 32,
             epoll_max_events: 256,
             tcp_nodelay_value: false,
-            socket_read_buffer: 1024 * 4,
-            socket_write_buffer: 1024 * 4,
-            wait_write_msg_max_num: 512,
+            socket_read_buffer: 65536,
+            socket_write_buffer: 65536,
+            wait_write_msg_max_num: 1024,
             single_write_msg_max_num: 512,
             vec_socket_addr: Vec::new(),
             connect_timeout_duration: 10,
-            reconnect_socket_interval: 15,
+            reconnect_socket_interval: 50,
         }
     }
 

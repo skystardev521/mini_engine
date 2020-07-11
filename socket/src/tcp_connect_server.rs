@@ -1,21 +1,22 @@
-use crate::epoll::Epoll;
 use crate::message::MsgData;
 use crate::message::NetMsg;
 use crate::message::ProtoId;
+use crate::os_epoll::OSEpoll;
+use crate::os_socket;
+use crate::tcp_connect::TcpConnect;
 use crate::tcp_connect_config::TcpConnectConfig;
 use crate::tcp_connect_mgmt::TcpConnectMgmt;
-use crate::tcp_socket::ReadResult;
-use crate::tcp_socket::WriteResult;
+use crate::tcp_socket_reader::ReadResult;
+use crate::tcp_socket_writer::WriteResult;
 use libc;
 use log::{error, info, warn};
 use std::io::Error;
 use std::io::ErrorKind;
 use std::net::Shutdown;
+use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::RawFd;
-use std::net::SocketAddr;
-use crate::tcp_connect::TcpConnect;
 use std::time::Duration;
 use utils::time;
 
@@ -26,7 +27,7 @@ use crate::tcp_socket::TcpSocket;
 const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
 pub struct TcpConnectServer<'a> {
-    epoll: Epoll,
+    os_epoll: OSEpoll,
     config: &'a TcpConnectConfig,
     tcp_connect_mgmt: TcpConnectMgmt<'a>,
     vec_epoll_event: Vec<libc::epoll_event>,
@@ -48,12 +49,12 @@ impl<'a> TcpConnectServer<'a> {
         config: &'a TcpConnectConfig,
         net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
     ) -> Result<Self, String> {
-        let epoll: Epoll = Epoll::new()?;
+        let os_epoll: OSEpoll = OSEpoll::new()?;
 
         let tcp_connect_mgmt = TcpConnectMgmt::new(config)?;
 
         Ok(TcpConnectServer {
-            epoll,
+            os_epoll,
             config,
             net_msg_cb,
             tcp_connect_mgmt,
@@ -66,7 +67,7 @@ impl<'a> TcpConnectServer<'a> {
     pub fn tick(&mut self) {}
     pub fn epoll_event(&mut self, epoll_wait_timeout: i32) -> Result<u16, String> {
         match self
-            .epoll
+            .os_epoll
             .wait(epoll_wait_timeout, &mut self.vec_epoll_event)
         {
             Ok(0) => return Ok(0),
@@ -111,12 +112,12 @@ impl<'a> TcpConnectServer<'a> {
                             break;
                         }
                         ReadResult::ReadZeroSize => {
-                            epoll_del_fd(&self.epoll, sid, tcp_socket.socket.as_raw_fd());
+                            epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
                             warn!("tcp_socket.reader.read :{}", "Read Zero Size");
                             break;
                         }
                         ReadResult::Error(err) => {
-                            epoll_del_fd(&self.epoll, sid, tcp_socket.socket.as_raw_fd());
+                            epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
                             error!("tcp_socket.reader.read id:{} err:{}", sid, err);
                             break;
                         }
@@ -144,10 +145,10 @@ impl<'a> TcpConnectServer<'a> {
             Some(tcp_connect) => {
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                     if tcp_socket.writer.get_msg_data_count() > self.config.wait_write_msg_max_num {
-                        //epoll_del_fd(&self.epoll, net_msg.sid, tcp_socket.socket.as_raw_fd());
+                        //epoll_del_fd(&self.os_epoll, net_msg.sid, tcp_socket.socket.as_raw_fd());
 
                         // 发送服务繁忙消息
-                        
+
                         warn!("net_msg.id:{} Too much msg_data not send", net_msg.sid);
                         return;
                     }
@@ -158,8 +159,12 @@ impl<'a> TcpConnectServer<'a> {
                         }
                     }
                     if tcp_socket.writer.get_msg_data_count() == 1 {
-                        if let Err(err) = write_data(&self.epoll, net_msg.sid, tcp_socket) {
-                            epoll_del_fd(&self.epoll, net_msg.sid, tcp_socket.socket.as_raw_fd());
+                        if let Err(err) = write_data(&self.os_epoll, net_msg.sid, tcp_socket) {
+                            epoll_del_fd(
+                                &self.os_epoll,
+                                net_msg.sid,
+                                tcp_socket.socket.as_raw_fd(),
+                            );
                             warn!("tcp_socket.writer.write err:{}", err);
                         }
                     }
@@ -176,8 +181,8 @@ impl<'a> TcpConnectServer<'a> {
     fn write_event(&mut self, sid: u64) {
         if let Some(tcp_connect) = self.tcp_connect_mgmt.get_tcp_connect(sid) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
-                if let Err(err) = write_data(&self.epoll, sid, tcp_socket) {
-                    epoll_del_fd(&self.epoll, sid, tcp_socket.socket.as_raw_fd());
+                if let Err(err) = write_data(&self.os_epoll, sid, tcp_socket) {
+                    epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
                     warn!("tcp_socket.writer.write err:{}", err);
                 }
             }
@@ -189,10 +194,10 @@ impl<'a> TcpConnectServer<'a> {
     fn error_event(&mut self, sid: u64, err: String) {
         if let Some(tcp_connect) = self.tcp_connect_mgmt.get_tcp_connect(sid) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
-                epoll_del_fd(&self.epoll, sid, tcp_socket.socket.as_raw_fd());
+                epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
             }
         }
-        warn!("epoll event error:{}", err);
+        warn!("os_epoll event error:{}", err);
     }
 
     fn tcp_socket_close_cb(&mut self, sid: u64) {
@@ -206,36 +211,33 @@ impl<'a> TcpConnectServer<'a> {
         }) {
             Ok(()) => (),
             Err(pid) => {
-                warn!(
-                    "tcp_socket_close_cb ({}) net_msg_cb return :{:?}",
-                    sid, pid
-                );
+                warn!("tcp_socket_close_cb ({}) net_msg_cb return :{:?}", sid, pid);
             }
         }
     }
 }
 
-fn epoll_del_fd(epoll: &Epoll, sid: u64, raw_fd: RawFd) {
-    if let Err(err) = epoll.ctl_del_fd(sid, raw_fd) {
-        warn!("epoll.ctl_del_fd({}) Error:{}", sid, err);
+fn epoll_del_fd(os_epoll: &OSEpoll, sid: u64, raw_fd: RawFd) {
+    if let Err(err) = os_epoll.ctl_del_fd(sid, raw_fd) {
+        warn!("os_epoll.ctl_del_fd({}) Error:{}", sid, err);
     }
 }
 
-fn write_data(epoll: &Epoll, sid: u64, tcp_socket: &mut TcpSocket) -> Result<(), String> {
+fn write_data(os_epoll: &OSEpoll, sid: u64, tcp_socket: &mut TcpSocket) -> Result<(), String> {
     match tcp_socket.writer.write(&mut tcp_socket.socket) {
         WriteResult::Finish => {
             if tcp_socket.epoll_events == libc::EPOLLIN {
                 return Ok(());
             }
             tcp_socket.epoll_events = libc::EPOLLIN;
-            return epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
+            return os_epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
         }
         WriteResult::BufferFull => {
             if tcp_socket.epoll_events == EPOLL_IN_OUT {
                 return Ok(());
             }
             tcp_socket.epoll_events = EPOLL_IN_OUT;
-            return epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
+            return os_epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
         }
         WriteResult::Error(err) => return Err(err),
     }
@@ -251,11 +253,7 @@ pub fn reconnect_tcp_connect(
     {
         return Ok(());
     }
-    match new_tcp_socket(
-        tcp_connect.get_socket_addr(),
-        config.msg_max_size,
-        config.connect_timeout_duration,
-    ) {
+    match new_tcp_socket(tcp_connect.get_socket_addr(), config) {
         Ok(tcp_socket) => {
             tcp_connect.set_tcp_socket_opt(Some(tcp_socket));
             return Ok(());
@@ -264,20 +262,35 @@ pub fn reconnect_tcp_connect(
     }
 }
 
-fn new_tcp_socket(
-    socket_addr: &String,
-    msg_max_size: u32,
-    timeout_duration: u16,
-) -> Result<TcpSocket, String> {
+fn new_tcp_socket(socket_addr: &String, config: &TcpConnectConfig) -> Result<TcpSocket, String> {
     match socket_addr.parse::<SocketAddr>() {
         Ok(addr) => {
-            let duration = Duration::from_millis(timeout_duration as u64);
+            let duration = Duration::from_millis(config.connect_timeout_duration as u64);
             match TcpStream::connect_timeout(&addr, duration) {
                 Ok(socket) => {
                     if let Err(err) = socket.set_nonblocking(true) {
                         return Err(format!("{}", err));
                     }
-                    return Ok(TcpSocket::new(socket, msg_max_size));
+                    if let Err(err) = socket.set_nodelay(config.tcp_nodelay_value) {
+                        return Err(format!("set_nodelay:{}", err));
+                    }
+
+                    let raw_fd = socket.as_raw_fd();
+                    os_socket::setsockopt(
+                        raw_fd,
+                        libc::SOL_SOCKET,
+                        libc::SO_RCVBUF,
+                        config.socket_read_buffer,
+                    )?;
+
+                    os_socket::setsockopt(
+                        raw_fd,
+                        libc::SOL_SOCKET,
+                        libc::SO_SNDBUF,
+                        config.socket_write_buffer,
+                    )?;
+
+                    return Ok(TcpSocket::new(socket, config.msg_max_size));
                 }
                 Err(err) => return Err(format!("{}", err)),
             }

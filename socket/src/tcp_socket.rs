@@ -3,20 +3,6 @@ use crate::tcp_socket_reader::TcpSocketReader;
 use crate::tcp_socket_writer::TcpSocketWriter;
 use std::net::TcpStream;
 
-pub enum ReadResult {
-    Error(String),
-    ReadZeroSize,
-    BufferIsEmpty,
-    Data(Box<MsgData>),
-}
-
-#[derive(Debug)]
-pub enum WriteResult {
-    Finish,
-    BufferFull,
-    Error(String),
-}
-
 pub struct TcpSocket {
     pub epoll_events: i32,
     pub socket: TcpStream,

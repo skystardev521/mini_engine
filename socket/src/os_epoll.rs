@@ -5,11 +5,11 @@ use std::os::unix::io::RawFd;
 const EPOLL_EVENTS: i32 = (libc::EPOLLET | libc::EPOLLERR) as i32;
 
 #[derive(Debug)]
-pub struct Epoll {
+pub struct OSEpoll {
     fd: libc::c_int,
 }
 
-impl Drop for Epoll {
+impl Drop for OSEpoll {
     fn drop(&mut self) {
         if self.fd != -1 {
             unsafe { libc::close(self.fd) };
@@ -17,14 +17,14 @@ impl Drop for Epoll {
     }
 }
 
-impl Epoll {
+impl OSEpoll {
     pub fn new() -> Result<Self, String> {
-        let mut epoll = Epoll { fd: -1 };
+        let mut os_epoll = OSEpoll { fd: -1 };
         unsafe {
             let fd = libc::epoll_create1(0);
             if fd != -1 {
-                epoll.fd = fd;
-                return Ok(epoll);
+                os_epoll.fd = fd;
+                return Ok(os_epoll);
             } else {
                 return Err(Error::last_os_error().to_string());
             }

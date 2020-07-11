@@ -1,9 +1,11 @@
 use log::{error, info, warn};
 
 use socket::message::MsgData;
-use socket::tcp_socket::ReadResult;
+
 use socket::tcp_socket::TcpSocket;
-use socket::tcp_socket::WriteResult;
+use socket::tcp_socket_reader::ReadResult;
+use socket::tcp_socket_writer::WriteResult;
+
 use std::net::Shutdown;
 use std::net::TcpStream;
 use std::thread;

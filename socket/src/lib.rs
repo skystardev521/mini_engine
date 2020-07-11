@@ -1,5 +1,6 @@
-pub mod epoll;
 pub mod message;
+pub mod os_epoll;
+pub mod os_socket;
 pub mod tcp_connect;
 pub mod tcp_connect_config;
 pub mod tcp_connect_mgmt;

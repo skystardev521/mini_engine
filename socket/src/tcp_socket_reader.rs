@@ -1,11 +1,17 @@
 use crate::message;
 use crate::message::MsgData;
-use crate::tcp_socket::ReadResult;
 use std::io::prelude::Read;
 use std::io::ErrorKind;
 use std::mem;
 use std::net::TcpStream;
 use utils::bytes;
+
+pub enum ReadResult {
+    Error(String),
+    ReadZeroSize,
+    BufferIsEmpty,
+    Data(Box<MsgData>),
+}
 
 pub struct TcpSocketReader {
     //包id(0~4096)

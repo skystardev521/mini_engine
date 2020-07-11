@@ -1,11 +1,17 @@
 use crate::message;
 use crate::message::MsgData;
-use crate::tcp_socket::WriteResult;
 use std::collections::VecDeque;
 use std::io::prelude::Write;
 use std::io::ErrorKind;
 use std::net::TcpStream;
 use utils::bytes;
+
+#[derive(Debug)]
+pub enum WriteResult {
+    Finish,
+    BufferFull,
+    Error(String),
+}
 
 pub struct TcpSocketWriter {
     next_mid: u16,

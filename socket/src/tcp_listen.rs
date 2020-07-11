@@ -1,6 +1,6 @@
+use crate::os_socket;
 use std::net::TcpListener;
 use std::os::unix::io::AsRawFd;
-use utils::native;
 
 pub struct TcpListen {
     listen: TcpListener,
@@ -13,15 +13,15 @@ impl TcpListen {
             Err(err) => return Err(format!("{}", err)),
         };
 
-        match listen.set_nonblocking(true) {
-            Ok(()) => (),
-            Err(err) => return Err(format!("{}", err)),
+        if let Err(err) = listen.set_nonblocking(true) {
+            return Err(format!("{}", err));
         }
 
-        match native::setsockopt(listen.as_raw_fd(), libc::SO_REUSEADDR, 1) {
-            Ok(()) => (),
-            Err(err) => return Err(err),
-        }
+        let raw_fd = listen.as_raw_fd();
+        os_socket::setsockopt(raw_fd, libc::SOL_TCP, libc::TCP_DEFER_ACCEPT, 3)?;
+
+        //os_socket::setsockopt(raw_fd, libc::SOL_SOCKET, libc::SO_REUSEADDR, 0)?;
+
         Ok(TcpListen { listen })
     }
 

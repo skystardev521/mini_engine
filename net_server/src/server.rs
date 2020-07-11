@@ -29,7 +29,10 @@ impl<'a> Server<'a> {
 
     pub fn new_net_msg(&mut self, net_msg: NetMsg) {
         //info!("new_net_msg id:{}", net_msg.id);
-        (self.net_msg_cb)(net_msg);
+        match (self.net_msg_cb)(net_msg) {
+            Ok(()) => (),
+            Err(pid) => error!("net msg cb:{:?}", pid),
+        }
     }
 
     pub fn tick(&mut self) {}
