@@ -16,7 +16,7 @@ pub enum ReadResult {
 pub struct TcpSocketReader {
     //包id(0~4096)
     next_mid: u16,
-    max_size: u32,
+    max_size: usize,
     head_pos: usize,
     data_pos: usize,
     msg_data: Box<MsgData>,
@@ -25,22 +25,23 @@ pub struct TcpSocketReader {
 
 impl TcpSocketReader {
     /// max_size：消息的最大字节1024 * 1024
-    pub fn new(max_size: u32) -> Box<Self> {
+    pub fn new(msg_max_size: u32) -> Box<Self> {
+        let mut max_size = msg_max_size;
+        if max_size > message::MSG_MAX_SIZE {
+            max_size = message::MSG_MAX_SIZE
+        }
+
         Box::new(TcpSocketReader {
             next_mid: 0,
             head_pos: 0,
             data_pos: 0,
+            max_size: max_size as usize,
             head_data: [0u8; message::MSG_HEAD_SIZE],
             msg_data: Box::new(MsgData {
                 pid: 0,
                 ext: 0,
                 data: vec![],
             }),
-            max_size: if max_size > message::MSG_MAX_SIZE {
-                message::MSG_MAX_SIZE
-            } else {
-                max_size
-            },
         })
     }
 
@@ -61,7 +62,7 @@ impl TcpSocketReader {
                                 bytes::read_u32(&self.head_data[message::HEAD_DATA_EXT_POS..]);
 
                             let new_mid = (new_data << 20 >> 20) as u16;
-                            let new_data_size = (new_data >> 12) as u32;
+                            let new_data_size = (new_data >> 12) as usize;
 
                             //--------------------decode msg head end-------------------
 
@@ -70,8 +71,8 @@ impl TcpSocketReader {
                             }
                             if new_data_size > self.max_size {
                                 return ReadResult::Error(format!(
-                                    "socket.read Msg Size Too Big size:{}",
-                                    new_data_size
+                                    "Msg Max Size:{} read size:{}",
+                                    self.max_size, new_data_size
                                 ));
                             }
 

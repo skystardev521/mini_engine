@@ -11,12 +11,12 @@ pub struct TcpSocket {
 }
 
 impl TcpSocket {
-    pub fn new(socket: TcpStream, max_size: u32) -> Self {
+    pub fn new(socket: TcpStream, msg_max_size: u32) -> Self {
         TcpSocket {
             epoll_events: 0,
             socket: socket,
-            reader: TcpSocketReader::new(max_size),
-            writer: TcpSocketWriter::new(max_size),
+            reader: TcpSocketReader::new(msg_max_size),
+            writer: TcpSocketWriter::new(msg_max_size),
         }
     }
 }

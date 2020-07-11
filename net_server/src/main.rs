@@ -78,8 +78,10 @@ fn main() {
 }
 
 fn read_tcp_connect_confg(_path: String) -> Result<TcpConnectConfig, String> {
-    let config_builder = TcpConnectConfigBuilder::new();
-    let config = config_builder.builder();
+    let mut config_builder = TcpConnectConfigBuilder::new();
+    let config = config_builder
+        .set_vec_socket_addr(&vec!["0.0.0.0:9999".into()])
+        .builder();
     Ok(config)
 }
 

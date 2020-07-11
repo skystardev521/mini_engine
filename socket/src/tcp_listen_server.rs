@@ -178,7 +178,7 @@ impl<'a> TcpListenServer<'a> {
                 }
             }
             None => {
-                self.tcp_socket_close_cb(net_msg.sid);
+                self.send_simple_net_msg(net_msg.sid, ProtoId::SocketClose);
                 warn!("write_net_msg net_msg.id no exitis:{}", net_msg.sid);
             }
         }
@@ -197,7 +197,7 @@ impl<'a> TcpListenServer<'a> {
 
     fn error_event(&mut self, sid: u64, err: String) {
         self.del_tcp_socket(sid, true);
-        warn!("os_epoll event error:{}", err);
+        warn!("os_epoll event sid:{} error:{}", sid, err);
     }
 
     fn accept_event(&mut self) {
@@ -260,15 +260,15 @@ impl<'a> TcpListenServer<'a> {
             }
         }
     }
-    /// is_send_socket_close_proto:删除后是不是回调到业务层
-    fn del_tcp_socket(&mut self, sid: u64, is_send_socket_close_proto: bool) {
+    /// is_send_logic:删除后要不要通知业务层
+    fn del_tcp_socket(&mut self, sid: u64, is_send_logic: bool) {
         match self.tcp_socket_mgmt.del_tcp_socket(sid) {
             Ok(tcp_socket) => {
                 if let Err(err) = self.os_epoll.ctl_del_fd(sid, tcp_socket.socket.as_raw_fd()) {
                     warn!("os_epoll.ctl_del_fd({}) Error:{}", sid, err);
                 }
-                if is_send_socket_close_proto {
-                    self.tcp_socket_close_cb(sid);
+                if is_send_logic {
+                    self.send_simple_net_msg(sid, ProtoId::SocketClose);
                 }
             }
             Err(err) => {
@@ -277,18 +277,18 @@ impl<'a> TcpListenServer<'a> {
         }
     }
 
-    fn tcp_socket_close_cb(&mut self, sid: u64) {
+    fn send_simple_net_msg(&mut self, sid: u64, pid: ProtoId) {
         match (self.net_msg_cb)(NetMsg {
             sid: sid,
             data: Box::new(MsgData {
                 ext: 0,
                 data: vec![],
-                pid: ProtoId::SocketClose as u16,
+                pid: pid as u16,
             }),
         }) {
             Ok(()) => (),
             Err(pid) => {
-                warn!("tcp_socket_close_cb ({}) net_msg_cb return :{:?}", sid, pid);
+                warn!("send_simple_net_msg ({}) net_msg_cb return :{:?}", sid, pid);
             }
         }
     }

@@ -165,11 +165,11 @@ fn agent_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: Sy
     let mut net_msg_cb = |net_msg: NetMsg| match sync_sender.try_send(net_msg) {
         Ok(()) => return Ok(()),
         Err(TrySendError::Full(_)) => {
-            error!("net_thread try_send Full");
+            error!("agent_thread_run try_send Full");
             return Err(ProtoId::BusyServer);
         }
         Err(TrySendError::Disconnected(_)) => {
-            error!("net_thread try_send Disconnected");
+            error!("agent_thread_run try_send Disconnected");
             return Err(ProtoId::ExceptionServer);
         }
     };
@@ -194,7 +194,7 @@ fn agent_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: Sy
                 continue 'next_loop;
             }
             Err(RecvTimeoutError::Disconnected) => {
-                error!("agent_thread recv_timeout Disconnected");
+                error!("agent_thread_run recv_timeout Disconnected");
             }
         }
     }

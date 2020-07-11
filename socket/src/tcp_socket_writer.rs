@@ -24,19 +24,19 @@ pub struct TcpSocketWriter {
 }
 
 impl TcpSocketWriter {
-    pub fn new(max_size: u32) -> Box<Self> {
+    pub fn new(msg_max_size: u32) -> Box<Self> {
+        let mut max_size = msg_max_size;
+        if max_size > message::MSG_MAX_SIZE {
+            max_size = message::MSG_MAX_SIZE
+        }
         Box::new(TcpSocketWriter {
             next_mid: 0,
             head_pos: 0,
             data_pos: 0,
+            max_size: max_size as usize,
             vec_deque: VecDeque::new(),
             is_write_finish_current_data: true,
             head_data: [0u8; message::MSG_HEAD_SIZE],
-            max_size: if max_size > message::MSG_MAX_SIZE {
-                message::MSG_MAX_SIZE
-            } else {
-                max_size
-            } as usize,
         })
     }
 

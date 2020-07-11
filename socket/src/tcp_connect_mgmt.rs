@@ -10,7 +10,7 @@ pub struct TcpConnectMgmt<'a> {
     //不会等于零
     next_sid: u64,
     config: &'a TcpConnectConfig,
-    /// 可以优化使用别的数据结构
+    /// 可以优化使用别的数据结构 列如 vec
     tcp_connect_hash_map: HashMap<u64, TcpConnect>,
 }
 

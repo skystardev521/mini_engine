@@ -145,11 +145,10 @@ impl<'a> TcpConnectServer<'a> {
             Some(tcp_connect) => {
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                     if tcp_socket.writer.get_msg_data_count() > self.config.wait_write_msg_max_num {
-                        //epoll_del_fd(&self.os_epoll, net_msg.sid, tcp_socket.socket.as_raw_fd());
-
                         // 发送服务繁忙消息
 
                         warn!("net_msg.id:{} Too much msg_data not send", net_msg.sid);
+                        self.send_simple_net_msg(net_msg.sid, ProtoId::BusyServer);
                         return;
                     }
                     match tcp_socket.writer.add_msg_data(net_msg.data) {
@@ -160,20 +159,36 @@ impl<'a> TcpConnectServer<'a> {
                     }
                     if tcp_socket.writer.get_msg_data_count() == 1 {
                         if let Err(err) = write_data(&self.os_epoll, net_msg.sid, tcp_socket) {
+                            warn!("tcp_socket.writer.write err:{}", err);
+
                             epoll_del_fd(
                                 &self.os_epoll,
                                 net_msg.sid,
                                 tcp_socket.socket.as_raw_fd(),
                             );
-                            warn!("tcp_socket.writer.write err:{}", err);
+
+                            match reconnect_tcp_connect(self.config, &tcp_connect) {
+                                Ok(None) => (),
+                                Ok(Some(new_tcp_socket)) => {
+                                    tcp_connect.set_tcp_socket_opt(Some(new_tcp_socket));
+                                }
+                                Err(err) => {
+                                    tcp_connect.set_tcp_socket_opt(None);
+                                    error!(
+                                        "reconnect_tcp_connect {} error:{}",
+                                        tcp_connect.get_socket_addr(),
+                                        err
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
             None => {
-                self.tcp_socket_close_cb(net_msg.sid);
                 warn!("net_msg.sid no exitis:{}", net_msg.sid);
+                self.send_simple_net_msg(net_msg.sid, ProtoId::SocketClose);
             }
         }
     }
@@ -182,8 +197,23 @@ impl<'a> TcpConnectServer<'a> {
         if let Some(tcp_connect) = self.tcp_connect_mgmt.get_tcp_connect(sid) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 if let Err(err) = write_data(&self.os_epoll, sid, tcp_socket) {
+                    warn!("tcp_socket.writer.write sid:{} err:{}", sid, err);
                     epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
-                    warn!("tcp_socket.writer.write err:{}", err);
+
+                    match reconnect_tcp_connect(self.config, &tcp_connect) {
+                        Ok(None) => (),
+                        Ok(Some(new_tcp_socket)) => {
+                            tcp_connect.set_tcp_socket_opt(Some(new_tcp_socket));
+                        }
+                        Err(err) => {
+                            tcp_connect.set_tcp_socket_opt(None);
+                            error!(
+                                "reconnect_tcp_connect {} error:{}",
+                                tcp_connect.get_socket_addr(),
+                                err
+                            )
+                        }
+                    }
                 }
             }
         } else {
@@ -192,26 +222,41 @@ impl<'a> TcpConnectServer<'a> {
     }
 
     fn error_event(&mut self, sid: u64, err: String) {
+        warn!("os_epoll error event:{}", err);
         if let Some(tcp_connect) = self.tcp_connect_mgmt.get_tcp_connect(sid) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
             }
+
+            match reconnect_tcp_connect(self.config, &tcp_connect) {
+                Ok(None) => (),
+                Ok(Some(new_tcp_socket)) => {
+                    tcp_connect.set_tcp_socket_opt(Some(new_tcp_socket));
+                }
+                Err(err) => {
+                    tcp_connect.set_tcp_socket_opt(None);
+                    error!(
+                        "reconnect_tcp_connect {} error:{}",
+                        tcp_connect.get_socket_addr(),
+                        err
+                    )
+                }
+            }
         }
-        warn!("os_epoll event error:{}", err);
     }
 
-    fn tcp_socket_close_cb(&mut self, sid: u64) {
+    fn send_simple_net_msg(&mut self, sid: u64, pid: ProtoId) {
         match (self.net_msg_cb)(NetMsg {
             sid: sid,
             data: Box::new(MsgData {
                 ext: 0,
                 data: vec![],
-                pid: ProtoId::SocketClose as u16,
+                pid: pid as u16,
             }),
         }) {
             Ok(()) => (),
             Err(pid) => {
-                warn!("tcp_socket_close_cb ({}) net_msg_cb return :{:?}", sid, pid);
+                warn!("send_simple_net_msg ({}) net_msg_cb return :{:?}", sid, pid);
             }
         }
     }
@@ -245,18 +290,17 @@ fn write_data(os_epoll: &OSEpoll, sid: u64, tcp_socket: &mut TcpSocket) -> Resul
 
 pub fn reconnect_tcp_connect(
     config: &TcpConnectConfig,
-    tcp_connect: &mut TcpConnect,
-) -> Result<(), String> {
+    tcp_connect: &TcpConnect,
+) -> Result<Option<TcpSocket>, String> {
     let now_timestamp = time::timestamp();
     if tcp_connect.get_last_reconnect_timestamp() + config.reconnect_socket_interval as u64
         > now_timestamp
     {
-        return Ok(());
+        return Ok(None);
     }
     match new_tcp_socket(tcp_connect.get_socket_addr(), config) {
         Ok(tcp_socket) => {
-            tcp_connect.set_tcp_socket_opt(Some(tcp_socket));
-            return Ok(());
+            return Ok(Some(tcp_socket));
         }
         Err(err) => return Err(err),
     }
