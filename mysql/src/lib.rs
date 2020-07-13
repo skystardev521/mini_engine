@@ -1,3 +1,6 @@
+pub mod config;
+pub mod mysql;
+
 #[cfg(test)]
 mod tests {
     #[test]
