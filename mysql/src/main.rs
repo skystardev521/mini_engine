@@ -2,11 +2,14 @@ use mysql::Config;
 use mysql::MysqlConnect;
 use std::ptr::{self, NonNull};
 
+use mysql::test;
+
 fn main() {
     //diesel
     println!("hello mysql world");
-    //let mut mysql: mysql_api::MYSQL;
-    //mysql_ffi::mysql_init(ptr::null_mut());
+
+    test();
+    
 
     let mut config = Config::new();
 
@@ -42,12 +45,12 @@ fn main() {
 
         for f in 0..field_num as usize {
             let p = unsafe { &*slice }[f];
-            //if f == 0 {
-            //    print!("{:?} ", p);
-            //} else {
+            if f == 0 {
+                print!("{:?} ", unsafe { *(p as *const u16) });
+            } else {
                 let val = c_str_to_string(p);
                 print!("{} ", val);
-            //}
+            }
         }
         println!("");
         //}
@@ -59,3 +62,4 @@ fn main() {
             .into_owned()
     }
 }
+

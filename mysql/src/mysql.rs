@@ -10,7 +10,15 @@ pub type MysqlRow = ffi::MYSQL_ROW;
 pub type MysqlField = *mut ffi::MYSQL_FIELD;
 pub type MysqlRes = *mut ffi::MYSQL_RES;
 
-/// https://www.mysqlzh.com/api/66.html
+pub type TINYINT = i8;
+pub type SMALLINT = i16;
+pub type INTEGER = i32;
+pub type BIGINT = i64;
+pub type FLOAT = f32;
+pub type DOUBLE = f64;
+pub type MyString = String;
+
+/// www.mysqlzh.com/api/66.html
 pub struct MysqlConnect<'a> {
     config: &'a Config,
     mysql: NonNull<ffi::MYSQL>,
