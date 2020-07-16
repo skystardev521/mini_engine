@@ -2,7 +2,6 @@
 use utils::logger::Logger;
 //use utils::time;
 pub mod test_tcp;
-use std::io::prelude::*;
 
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,

@@ -24,6 +24,7 @@ impl<'a> Server<'a> {
         config: &'a Config,
         net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
     ) -> Self {
+        let _confg = config;
         Server { config, net_msg_cb }
     }
 

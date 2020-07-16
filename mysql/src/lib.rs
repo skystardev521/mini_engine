@@ -1,5 +1,8 @@
-pub mod config;
-pub mod mysql;
+mod config;
+mod mysql;
+
+pub use config::Config;
+pub use mysql::MysqlConnect;
 
 #[cfg(test)]
 mod tests {

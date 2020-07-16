@@ -10,15 +10,15 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Result<Self, String> {
-        Ok(Config {
+    pub fn new() -> Self {
+        Config {
             port: 3306,
             user: None,
             host: None,
             password: None,
             database: None,
             unix_socket: None,
-        })
+        }
     }
 
     pub fn get_port(&self) -> u16 {
