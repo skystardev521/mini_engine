@@ -6,17 +6,6 @@ use std::os::raw;
 use std::ptr::{self, NonNull};
 use std::sync::Once;
 
-pub type MysqlRow = ffi::MYSQL_ROW;
-pub type MysqlField = *mut ffi::MYSQL_FIELD;
-pub type MysqlRes = *mut ffi::MYSQL_RES;
-
-pub type TINYINT = i8;
-pub type SMALLINT = i16;
-pub type INTEGER = i32;
-pub type BIGINT = i64;
-pub type FLOAT = f32;
-pub type DOUBLE = f64;
-pub type MyString = String;
 
 /// www.mysqlzh.com/api/66.html
 pub struct MysqlConnect<'a> {
@@ -24,6 +13,8 @@ pub struct MysqlConnect<'a> {
     mysql: NonNull<ffi::MYSQL>,
     mysql_res: Cell<MysqlRes>,
 }
+
+
 
 //用于运行一次性全局初始化
 static MYSQL_SERVER_INIT: Once = Once::new();
@@ -121,8 +112,35 @@ impl<'a> MysqlConnect<'a> {
         }
         return Err(self.last_error());
     }
+    /// UPDATE,DELETE,INSERT return affected_rows
+    pub fn alter_data(&self, sql:&String)->Resut<u64, String>{
+        let res = unsafe {
+            ffi::mysql_real_query(
+                self.mysql.as_ptr(),
+                sql.as_ptr() as *const raw::c_char,
+                sql.len() as raw::c_ulong,
+            )
+        };
+        if res == 0 {
+            return Ok(self.affected_rows())
+        }
+        if let Err(err) = self.connect() {
+            return Err(err);
+        }
+        let res = unsafe {
+            ffi::mysql_real_query(
+                self.mysql.as_ptr(),
+                sql.as_ptr() as *const raw::c_char,
+                sql.len() as raw::c_ulong,
+            )
+        };
+        if res == 0 {
+            return Ok(self.affected_rows())
+        }
+        return Err(self.last_error());
+    }
 
-    pub fn real_query(&self, sql: &String) -> Result<(), String> {
+    pub fn read_data(&self, sql: &String) -> Result<(), String> {
         unsafe {
             if !self.mysql_res.get().is_null() {
                 ffi::mysql_free_result(self.mysql_res.get());
@@ -168,37 +186,6 @@ impl<'a> MysqlConnect<'a> {
         unsafe { ffi::mysql_insert_id(self.mysql.as_ptr()) as u64 }
     }
 
-    #[inline]
-    pub fn fetch_row(&self) -> MysqlRow {
-        unsafe { ffi::mysql_fetch_row(self.mysql_res.get()) }
-    }
-    #[inline]
-    /// 结果集的列  field.name
-    pub fn fetch_field(&self) -> MysqlField {
-        unsafe { ffi::mysql_fetch_field(self.mysql_res.get()) }
-    }
-
-    #[inline]
-    /// 结果集的列数组  field[0].name
-    pub fn fetch_fields(&self) -> MysqlField {
-        unsafe { ffi::mysql_fetch_fields(self.mysql_res.get()) }
-    }
-
-    #[inline]
-    /// 字段的数量
-    pub fn num_rows(&self) -> u64 {
-        unsafe { ffi::mysql_num_rows(self.mysql_res.get()) as u64 }
-    }
-    /// 结果的字段数量
-    pub fn num_fields(&self) -> u32 {
-        unsafe { ffi::mysql_num_fields(self.mysql_res.get()) as u32 }
-    }
-
-    #[inline]
-    /// 字段值的长度。
-    pub fn fetch_lengths(&self) -> u64 {
-        unsafe { ffi::mysql_fetch_lengths(self.mysql_res.get()) as u64 }
-    }
 
     #[inline]
     /// (UPDATE,DELETE,INSERT)语句影响的行数

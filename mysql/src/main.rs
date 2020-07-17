@@ -61,5 +61,9 @@ fn main() {
             .to_string_lossy()
             .into_owned()
     }
+
+    fn get()->(T,T1,T3) where t:copy{
+
+    }
 }
 
