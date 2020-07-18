@@ -355,20 +355,6 @@ impl<'a> Bytes<'a> {
         {
             let p: *const u8 = self.buffer[self.pos - 8..].as_ptr();
             unsafe { *(p as *const f64) }.swap_bytes()
-            /*
-            let p: *const u8 = [
-                self.buffer[self.pos - 7],
-                self.buffer[self.pos - 6],
-                self.buffer[self.pos - 5],
-                self.buffer[self.pos - 4],
-                self.buffer[self.pos - 3],
-                self.buffer[self.pos - 2],
-                self.buffer[self.pos - 1],
-                self.buffer[self.pos],
-            ]
-            .as_ptr();
-            unsafe { *(p as *const f64) }
-            */
         }
     }
 

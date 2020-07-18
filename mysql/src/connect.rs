@@ -1,20 +1,28 @@
 use crate::config::Config;
 use mysqlclient_sys as ffi;
-use std::cell::Cell;
+//use std::cell::Cell;
+use crate::result::QueryResult;
 use std::ffi::CStr;
 use std::os::raw;
 use std::ptr::{self, NonNull};
 use std::sync::Once;
 
+/// 查询过程中丢失了与MySQL服务器的连接
+pub const CR_SERVER_LOST: u32 = 2013;
 
-/// www.mysqlzh.com/api/66.html
-pub struct MysqlConnect<'a> {
+/// 连接到MySQL服务器失败
+pub const CR_CONN_HOST_ERROR: u32 = 2003;
+
+/// MySQL服务器不可用
+pub const CR_SERVER_GONE_ERROR: u32 = 2006;
+
+//www.mysqlzh.com/api/66.html
+
+pub struct Connect<'a> {
     config: &'a Config,
     mysql: NonNull<ffi::MYSQL>,
-    mysql_res: Cell<MysqlRes>,
+    //mysql_res: Cell<MysqlRes>,
 }
-
-
 
 //用于运行一次性全局初始化
 static MYSQL_SERVER_INIT: Once = Once::new();
@@ -47,7 +55,7 @@ fn init() -> Result<NonNull<ffi::MYSQL>, String> {
     }
 }
 
-impl<'a> Drop for MysqlConnect<'a> {
+impl<'a> Drop for Connect<'a> {
     fn drop(&mut self) {
         unsafe {
             ffi::mysql_close(self.mysql.as_ptr());
@@ -55,14 +63,13 @@ impl<'a> Drop for MysqlConnect<'a> {
     }
 }
 
-impl<'a> MysqlConnect<'a> {
+impl<'a> Connect<'a> {
     pub fn new(config: &'a Config) -> Result<Self, String> {
         server_init()?;
         let mysql = init()?;
-        let mysql = MysqlConnect {
+        let mysql = Connect {
             mysql: mysql,
             config: config,
-            mysql_res: Cell::new(ptr::null_mut()),
         };
 
         let charset_result = unsafe {
@@ -113,7 +120,7 @@ impl<'a> MysqlConnect<'a> {
         return Err(self.last_error());
     }
     /// UPDATE,DELETE,INSERT return affected_rows
-    pub fn alter_data(&self, sql:&String)->Resut<u64, String>{
+    pub fn alter_data(&self, sql: &String) -> Result<u64, String> {
         let res = unsafe {
             ffi::mysql_real_query(
                 self.mysql.as_ptr(),
@@ -122,10 +129,13 @@ impl<'a> MysqlConnect<'a> {
             )
         };
         if res == 0 {
-            return Ok(self.affected_rows())
+            return Ok(self.affected_rows());
         }
-        if let Err(err) = self.connect() {
-            return Err(err);
+        let errno = unsafe { ffi::mysql_errno(self.mysql.as_ptr()) };
+        if errno == CR_SERVER_LOST || errno == CR_CONN_HOST_ERROR || errno == CR_SERVER_GONE_ERROR {
+            if let Err(err) = self.connect() {
+                return Err(err);
+            }
         }
         let res = unsafe {
             ffi::mysql_real_query(
@@ -135,57 +145,54 @@ impl<'a> MysqlConnect<'a> {
             )
         };
         if res == 0 {
-            return Ok(self.affected_rows())
+            return Ok(self.affected_rows());
         }
         return Err(self.last_error());
     }
 
-    pub fn read_data(&self, sql: &String) -> Result<(), String> {
-        unsafe {
-            if !self.mysql_res.get().is_null() {
-                ffi::mysql_free_result(self.mysql_res.get());
-            }
-            let res = ffi::mysql_real_query(
+    pub fn query_data(&self, sql: &String) -> Result<QueryResult, String> {
+        let res = unsafe {
+            ffi::mysql_real_query(
                 self.mysql.as_ptr(),
                 sql.as_ptr() as *const raw::c_char,
                 sql.len() as raw::c_ulong,
-            );
-            if res == 0 {
-                if let Ok(res) = self.store_result() {
-                    if !res.is_null() {
-                        self.mysql_res.set(res);
-                    }
-                    return Ok(());
-                }
+            )
+        };
+        if res == 0 {
+            if let Ok(mysql_res) = self.store_result() {
+                return Ok(QueryResult::new(mysql_res));
             }
+        }
+
+        let errno = unsafe { ffi::mysql_errno(self.mysql.as_ptr()) };
+        if errno == CR_SERVER_LOST || errno == CR_CONN_HOST_ERROR || errno == CR_SERVER_GONE_ERROR {
             if let Err(err) = self.connect() {
                 return Err(err);
             }
-            let res = ffi::mysql_real_query(
+        }
+
+        let res = unsafe {
+            ffi::mysql_real_query(
                 self.mysql.as_ptr(),
                 sql.as_ptr() as *const raw::c_char,
                 sql.len() as raw::c_ulong,
-            );
-            if res == 0 {
-                match self.store_result() {
-                    Ok(res) => {
-                        if !res.is_null() {
-                            self.mysql_res.set(res);
-                        }
-                        return Ok(());
-                    }
-                    Err(err) => return Err(err),
+            )
+        };
+        if res == 0 {
+            match self.store_result() {
+                Ok(mysql_res) => {
+                    return Ok(QueryResult::new(mysql_res));
                 }
+                Err(err) => return Err(err),
             }
-            return Err(self.last_error());
         }
+        return Err(self.last_error());
     }
 
     #[inline]
     pub fn insert_id(&self) -> u64 {
         unsafe { ffi::mysql_insert_id(self.mysql.as_ptr()) as u64 }
     }
-
 
     #[inline]
     /// (UPDATE,DELETE,INSERT)语句影响的行数
@@ -215,21 +222,19 @@ impl<'a> MysqlConnect<'a> {
 
     /// 设置mysql选项
     pub fn set_mysql_options(&self) -> Result<(), String> {
-        self.real_query(&"SET sql_mode=(SELECT CONCAT(@@sql_mode, ',PIPES_AS_CONCAT'))".into())?;
-        self.real_query(&"SET time_zone = '+00:00';".into())?;
-        self.real_query(&"SET character_set_client = 'utf8mb4'".into())?;
-        self.real_query(&"SET character_set_connection = 'utf8mb4'".into())?;
-        self.real_query(&"SET character_set_results = 'utf8mb4'".into())
+        self.alter_data(&"SET sql_mode=(SELECT CONCAT(@@sql_mode, ',PIPES_AS_CONCAT'))".into())?;
+        self.alter_data(&"SET time_zone = '+00:00';".into())?;
+        self.alter_data(&"SET character_set_client = 'utf8mb4'".into())?;
+        self.alter_data(&"SET character_set_connection = 'utf8mb4'".into())?;
+        self.alter_data(&"SET character_set_results = 'utf8mb4'".into())?;
+        Ok(())
     }
 
     #[inline]
-    fn store_result(&self) -> Result<MysqlRes, String> {
+    fn store_result(&self) -> Result<*mut ffi::MYSQL_RES, String> {
         unsafe {
             let res = ffi::mysql_store_result(self.mysql.as_ptr());
             if !res.is_null() {
-                return Ok(res);
-            }
-            if ffi::mysql_field_count(self.mysql.as_ptr()) == 0 {
                 return Ok(res);
             }
             return Err(self.last_error());

@@ -1,10 +1,12 @@
 mod anydata;
 mod config;
-mod mysql;
+mod connect;
+mod result;
 
 pub use anydata::test;
 pub use config::Config;
-pub use mysql::MysqlConnect;
+pub use connect::Connect;
+pub use result::QueryResult;
 
 #[cfg(test)]
 mod tests {

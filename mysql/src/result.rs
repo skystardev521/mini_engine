@@ -1,4 +1,3 @@
-
 use mysqlclient_sys as ffi;
 
 pub type MysqlRow = ffi::MYSQL_ROW;
@@ -13,18 +12,18 @@ pub type FLOAT = f32;
 pub type DOUBLE = f64;
 pub type MyString = String;
 
-pub struct MysqlData(MysqlRes);
+pub struct QueryResult(MysqlRes);
 
-impl Drop for MysqlData {
+impl Drop for QueryResult {
     fn drop(&mut self) {
-        unsafe {
-            ffi::mysql_free_result(self.0)
-        }
+        unsafe { ffi::mysql_free_result(self.0) }
     }
 }
-impl MysqlData{
-
-#[inline]
+impl QueryResult {
+    pub fn new(mysql_res: MysqlRes) -> Self {
+        QueryResult(mysql_res)
+    }
+    #[inline]
     pub fn fetch_row(&self) -> MysqlRow {
         unsafe { ffi::mysql_fetch_row(self.0) }
     }
@@ -52,8 +51,7 @@ impl MysqlData{
 
     #[inline]
     /// 字段值的长度数组
-    pub fn fetch_lengths(&self) -> *mut u64  {
+    pub fn fetch_lengths(&self) -> *mut u64 {
         unsafe { ffi::mysql_fetch_lengths(self.0) as *mut u64 }
     }
-
 }
