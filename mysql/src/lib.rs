@@ -1,7 +1,7 @@
 mod anydata;
 mod config;
 mod connect;
-mod result;
+pub mod result;
 
 pub use anydata::test;
 pub use config::Config;

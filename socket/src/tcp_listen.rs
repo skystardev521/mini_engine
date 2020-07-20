@@ -10,7 +10,7 @@ impl TcpListen {
     pub fn new(socket_addr: &String) -> Result<Self, String> {
         let listen = match TcpListener::bind(socket_addr) {
             Ok(listen) => listen,
-            Err(err) => return Err(format!("{}", err)),
+            Err(err) => return Err(err.to_string()),
         };
 
         if let Err(err) = listen.set_nonblocking(true) {

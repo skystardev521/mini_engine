@@ -110,7 +110,7 @@ impl TcpSocketReader {
                     Err(ref err) if err.kind() == ErrorKind::Interrupted => {
                         continue; ////系统中断 再read一次
                     }
-                    Err(err) => return ReadResult::Error(format!("{}", err)),
+                    Err(err) => return ReadResult::Error(err.to_string()),
                 }
             }
         }
@@ -146,7 +146,7 @@ impl TcpSocketReader {
                     //info!("ErrorKind::Interrupted");
                     continue; ////系统中断 再read一次
                 }
-                Err(err) => return ReadResult::Error(format!("{}", err)),
+                Err(err) => return ReadResult::Error(err.to_string()),
             }
         }
     }

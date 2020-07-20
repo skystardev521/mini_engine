@@ -89,7 +89,7 @@ impl Logger /*<W>*/ {
                 });
 
                 match log::set_boxed_logger(logger) {
-                    Err(err) => Err(format!("{}", err)),
+                    Err(err) => Err(err.to_string()),
                     Ok(()) => Ok(log::set_max_level(log_level.to_level_filter())),
                 }
             }

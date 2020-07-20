@@ -216,7 +216,7 @@ impl<'a> TcpClientMgmt<'a> {
                 let id = self.vec_tcp_client.len() as u8;
                 Ok(TcpClient::new(id, socket_addr, Some(tcp_connect)))
             }
-            Err(err) => Err(format!("{}", err)),
+            Err(err) => Err(err.to_string()),
         }
     }
 }
@@ -232,14 +232,14 @@ fn new_tcp_connect(
             match TcpStream::connect_timeout(&addr, duration) {
                 Ok(socket) => {
                     if let Err(err) = socket.set_nonblocking(true) {
-                        return Err(format!("{}", err));
+                        return Err(err.to_string());
                     }
                     return Ok(TcpSocket::new(socket, msg_max_size));
                 }
-                Err(err) => return Err(format!("{}", err)),
+                Err(err) => return Err(err.to_string()),
             }
         }
-        Err(err) => Err(format!("{}", err)),
+        Err(err) => Err(err.to_string()),
     }
 }
 

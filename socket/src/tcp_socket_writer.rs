@@ -113,7 +113,7 @@ impl TcpSocketWriter {
                         Err(err) if err.kind() == ErrorKind::Interrupted => {
                             continue; //系统中断 再写一次
                         }
-                        Err(err) => return WriteResult::Error(format!("{}", err)),
+                        Err(err) => return WriteResult::Error(err.to_string()),
                     }
                 }
             }
@@ -142,7 +142,7 @@ impl TcpSocketWriter {
                         Err(err) if err.kind() == ErrorKind::Interrupted => {
                             continue; //系统中断 再写一次
                         }
-                        Err(err) => return WriteResult::Error(format!("{}", err)),
+                        Err(err) => return WriteResult::Error(err.to_string()),
                     }
                 }
             }

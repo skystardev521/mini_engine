@@ -313,7 +313,7 @@ fn new_tcp_socket(socket_addr: &String, config: &TcpConnectConfig) -> Result<Tcp
             match TcpStream::connect_timeout(&addr, duration) {
                 Ok(socket) => {
                     if let Err(err) = socket.set_nonblocking(true) {
-                        return Err(format!("{}", err));
+                        return Err(err.to_string());
                     }
                     if let Err(err) = socket.set_nodelay(config.tcp_nodelay_value) {
                         return Err(format!("set_nodelay:{}", err));
@@ -336,9 +336,9 @@ fn new_tcp_socket(socket_addr: &String, config: &TcpConnectConfig) -> Result<Tcp
 
                     return Ok(TcpSocket::new(socket, config.msg_max_size));
                 }
-                Err(err) => return Err(format!("{}", err)),
+                Err(err) => return Err(err.to_string()),
             }
         }
-        Err(err) => Err(format!("{}", err)),
+        Err(err) => Err(err.to_string()),
     }
 }

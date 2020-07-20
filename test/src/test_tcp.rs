@@ -171,7 +171,7 @@ fn new_client() -> Result<(thread::JoinHandle<()>, thread::JoinHandle<()>), Stri
 
         Err(err) => {
             error!("connect error:{}", err);
-            return Err(format!("{}", err));
+            return Err(err.to_string());
         }
     }
 }
