@@ -26,7 +26,6 @@ fn test() {
     let _ret_clos = returns_closure();
 }
 
-
 fn fn_pram<F>(f: F)
 where
     F: Fn(u16) -> u16,

@@ -12,7 +12,6 @@ use libc;
 use log::{error, info, warn};
 use std::io::Error;
 use std::io::ErrorKind;
-use std::net::Shutdown;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 

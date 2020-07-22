@@ -1,7 +1,6 @@
 use crate::config::Config;
-use mysqlclient_sys as ffi;
-//use std::cell::Cell;
 use crate::result::QueryResult;
+use mysqlclient_sys as ffi;
 use std::ffi::CStr;
 use std::os::raw;
 use std::ptr::{self, NonNull};
@@ -115,9 +114,10 @@ impl<'a> Connect<'a> {
         };
 
         if !mysql.is_null() {
-            return Ok(());
+            return self.set_mysql_options();
+        } else {
+            return Err(self.last_error());
         }
-        return Err(self.last_error());
     }
     /// UPDATE,DELETE,INSERT return affected_rows
     pub fn alter_data(&self, sql: &String) -> Result<u64, String> {
@@ -244,78 +244,6 @@ impl<'a> Connect<'a> {
     fn last_error(&self) -> String {
         unsafe { CStr::from_ptr(ffi::mysql_error(self.mysql.as_ptr())) }
             .to_string_lossy()
-            .into_owned()
+            .to_string()
     }
-
-    /*
-    fn more_results(&self) -> bool {
-        unsafe { ffi::mysql_more_results(self.mysql.as_ptr()) != 0 }
-    }
-
-    fn next_result(&self) -> Result<bool, String> {
-        let res = unsafe { ffi::mysql_next_result(self.mysql.as_ptr()) };
-        match res {
-            0 => Ok(true),
-            -1 => Ok(false),
-            _ => Err(self.last_error()),
-        }
-    }
-
-
-    fn mysql_stmt_init() -> Result<NonNull<ffi::MYSQL_STMT>, String> {
-        unsafe {
-            let res = ffi::mysql_stmt_init(ptr::null_mut());
-            if let Some(mysql_stmt) = NonNull::new(res) {
-                return Ok(mysql_stmt);
-            } else {
-                return Err("Out of memory creating prepared statement".into());
-            }
-        }
-    }
-
-        /// batch_execute(|| { self.execute(sql) })
-        pub fn batch_execute<T, F>(&self, callback: F) -> Result<T, String>
-        where
-            F: FnOnce() -> Result<T, String>,
-        {
-            unsafe {
-                ffi::mysql_set_server_option(
-                    self.mysql.as_ptr(),
-                    ffi::enum_mysql_set_option::MYSQL_OPTION_MULTI_STATEMENTS_ON,
-                );
-            }
-
-            self.last_error()?;
-            let result = callback();
-
-            unsafe {
-                ffi::mysql_set_server_option(
-                    self.mysql.as_ptr(),
-                    ffi::enum_mysql_set_option::MYSQL_OPTION_MULTI_STATEMENTS_OFF,
-                );
-            }
-            self.last_error()?;
-
-            result
-        }
-
-        fn mysql_free_result(&self) -> Result<(), String> {
-            unsafe {
-                let res = ffi::mysql_store_result(self.mysql.as_ptr());
-                if !res.is_null() {
-                    ffi::mysql_free_result(res)
-                }
-            };
-            self.last_error()
-        }
-        fn flush_pending_results(&self) -> Result<(), String> {
-            // We may have a result to process before advancing
-            self.mysql_free_result()?;
-            while self.more_results() {
-                self.next_result()?;
-                self.mysql_free_result()?;
-            }
-            Ok(())
-        }
-        */
 }

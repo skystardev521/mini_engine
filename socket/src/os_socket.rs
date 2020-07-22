@@ -1,5 +1,5 @@
 use libc;
-use std::ffi::CStr;
+
 use std::io::Error;
 use std::mem;
 use std::os::unix::io::RawFd;

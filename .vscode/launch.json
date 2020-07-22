@@ -63,15 +63,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'mysql'",
+            "name": "Debug executable 'mysqlclient'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=mysql",
-                    "--package=mysql"
+                    "--bin=mysqlclient",
+                    "--package=mysqlclient"
                 ],
                 "filter": {
-                    "name": "mysql",
+                    "name": "mysqlclient",
                     "kind": "bin"
                 }
             },
@@ -160,16 +160,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'mysql'",
+            "name": "Debug unit tests in library 'mysqlclient'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=mysql"
+                    "--package=mysqlclient"
                 ],
                 "filter": {
-                    "name": "mysql",
+                    "name": "mysqlclient",
                     "kind": "lib"
                 }
             },

@@ -1,4 +1,3 @@
-use crate::message::MsgData;
 use crate::tcp_socket_reader::TcpSocketReader;
 use crate::tcp_socket_writer::TcpSocketWriter;
 use std::net::TcpStream;
