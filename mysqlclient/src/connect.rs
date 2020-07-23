@@ -1,4 +1,5 @@
-use crate::config::Config;
+use crate::config::ConnConfig;
+use crate::result::MysqlResult;
 use crate::result::QueryResult;
 use mysqlclient_sys as ffi;
 use std::ffi::CStr;
@@ -17,8 +18,8 @@ pub const CR_SERVER_GONE_ERROR: u32 = 2006;
 
 //www.mysqlzh.com/api/66.html
 
-pub struct Connect<'a> {
-    config: &'a Config,
+pub struct Connect {
+    config: ConnConfig,
     mysql: NonNull<ffi::MYSQL>,
     //mysql_res: Cell<MysqlRes>,
 }
@@ -54,7 +55,7 @@ fn init() -> Result<NonNull<ffi::MYSQL>, String> {
     }
 }
 
-impl<'a> Drop for Connect<'a> {
+impl Drop for Connect {
     fn drop(&mut self) {
         unsafe {
             ffi::mysql_close(self.mysql.as_ptr());
@@ -62,8 +63,8 @@ impl<'a> Drop for Connect<'a> {
     }
 }
 
-impl<'a> Connect<'a> {
-    pub fn new(config: &'a Config) -> Result<Self, String> {
+impl Connect {
+    pub fn new(config: ConnConfig) -> Result<Self, String> {
         server_init()?;
         let mysql = init()?;
         let mysql = Connect {
@@ -150,7 +151,7 @@ impl<'a> Connect<'a> {
         return Err(self.last_error());
     }
 
-    pub fn query_data(&self, sql: &String) -> Result<QueryResult, String> {
+    pub fn query_data(&self, sql: &String) -> Result<QueryResult<MysqlResult>, String> {
         let res = unsafe {
             ffi::mysql_real_query(
                 self.mysql.as_ptr(),

@@ -1,20 +1,238 @@
-use crate::dbtask::DbTask;
-use crate::result::QueryResult;
+use crate::config::ConnConfig;
+use crate::config::ThreadConfig;
+use crate::task::TaskEnum;
 use log::{error, warn};
-use std::num::NonZeroU16;
 use std::num::NonZeroU8;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
-use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::TrySendError;
 use std::thread::Builder;
 use std::thread::JoinHandle;
-use std::thread::Thread;
 
-#[macro_use]
-use crate::result;
+pub struct Threads {
+    poll_idx: usize,
+    threads: Vec<Worker>,
+}
+
+impl Drop for Threads {
+    fn drop(&mut self) {
+        for worker in &self.threads {
+            match worker.sender(TaskEnum::ExitThread) {
+                Ok(()) => {}
+                Err(_) => {}
+            }
+        }
+        for worker in &self.threads {
+            worker.join();
+        }
+    }
+}
+
+impl Threads {
+    pub fn new(size: NonZeroU8) -> Self {
+        Threads {
+            poll_idx: 0,
+            threads: Vec::with_capacity(size.get() as usize),
+        }
+    }
+
+    #[inline]
+    fn next_poll_idx(&mut self) {
+        if self.poll_idx == self.threads.len() {
+            self.poll_idx = 0;
+        } else {
+            self.poll_idx += 1;
+        }
+    }
+
+    pub fn len(&self) -> u8 {
+        self.threads.len() as u8
+    }
+
+    pub fn push(&mut self, worker: Worker) {
+        self.threads.push(worker);
+    }
+
+    pub fn remove(&mut self, name: &String) -> bool {
+        let mut result = false;
+        for i in 0..self.threads.len() {
+            if self.threads[i].name.eq(name) {
+                self.threads.remove(i);
+                result = true;
+                break;
+            }
+        }
+        result
+    }
+
+    pub fn sender(&mut self, msg: TaskEnum) -> bool {
+        if self.threads.is_empty() {
+            return false;
+        }
+
+        let mut result = false;
+        let mut temp_msg = msg;
+
+        let init_idx = self.poll_idx;
+        loop {
+            match self.threads[self.poll_idx].sender(temp_msg) {
+                Ok(()) => {
+                    result = true;
+                    self.next_poll_idx();
+                    break;
+                }
+                Err(res_msg) => {
+                    temp_msg = res_msg;
+                }
+            }
+            self.next_poll_idx();
+            if self.poll_idx == init_idx {
+                break;
+            }
+        }
+        result
+    }
+
+    pub fn receiver(&mut self) {
+        if self.threads.is_empty() {
+            return;
+        }
+        let mut idx = 0;
+        loop {
+            if self.threads[idx].receiver() {
+                idx += 1;
+            } else {
+                self.threads.remove(idx);
+            }
+            if self.threads.len() == idx {
+                break;
+            }
+        }
+    }
+}
+
+pub struct Worker {
+    name: String,
+    receiver_max_num: u16,
+    join_handle: JoinHandle<()>,
+    sender: SyncSender<TaskEnum>,
+    receiver: Receiver<TaskEnum>,
+}
+
+impl Worker {
+    pub fn new(
+        name: String,
+        thread_config: ThreadConfig,
+        conn_config: Vec<ConnConfig>,
+        thread_spawn: Box<
+            dyn FnOnce(ThreadConfig, Vec<ConnConfig>, Receiver<TaskEnum>, SyncSender<TaskEnum>)
+                + Send,
+        >,
+    ) -> Result<Self, String> {
+        let (local_sender, remote_receiver): (SyncSender<TaskEnum>, Receiver<TaskEnum>) =
+            mpsc::sync_channel(thread_config.get_channel_size() as usize);
+
+        let (remote_sender, local_receiver): (SyncSender<TaskEnum>, Receiver<TaskEnum>) =
+            mpsc::sync_channel(thread_config.get_channel_size() as usize);
+
+        let mut builder = Builder::new().name(name.clone());
+        if thread_config.get_stack_size() > 0 {
+            builder = builder.stack_size(thread_config.get_stack_size());
+        }
+        let receiver_max_num = thread_config.get_receiver_max_num();
+
+        match builder.spawn(move || {
+            thread_spawn(thread_config, conn_config, remote_receiver, remote_sender);
+        }) {
+            Ok(join_handle) => Ok(Worker {
+                name,
+                join_handle,
+                sender: local_sender,
+                receiver: local_receiver,
+                receiver_max_num: receiver_max_num,
+            }),
+            Err(err) => Err(err.to_string()),
+        }
+    }
+
+    pub fn join(&self) {
+        /*
+        match self.join_handle.join() {
+            Ok(()) => {
+                warn!("Worker name:{} Exit", self.name);
+            }
+            Err(_) => {
+                error!("Worker name:{} Exit Error", self.name);
+            }
+        }
+        */
+    }
+
+    /// result:false 线程退出
+    pub fn receiver(&self) -> bool {
+        let mut num: u16 = 0;
+        loop {
+            match self.receiver.try_recv() {
+                Ok(TaskEnum::AlterTask(mut task)) => {
+                    (task.callback)(task.result);
+                }
+                Ok(TaskEnum::QueryTask(mut task)) => {
+                    (task.callback)(task.result);
+                }
+                Err(TryRecvError::Empty) => return true,
+
+                Ok(TaskEnum::ExitThread) => {
+                    warn!("Worker name:{} Exit", self.name);
+                    return false;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    error!("Worker name:{} Disconnected", self.name);
+                    return false;
+                }
+            }
+            num += 1;
+            if num == self.receiver_max_num {
+                return true;
+            }
+        }
+    }
+
+    #[inline]
+    fn sender(&self, msg: TaskEnum) -> Result<(), TaskEnum> {
+        match self.sender.try_send(msg) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(res_data)) => {
+                warn!("Worker name:{} sender Full", self.name);
+                Err(res_data)
+            }
+            Err(TrySendError::Disconnected(res_data)) => {
+                error!("Worker name:{} sender Disconnected", self.name);
+                Err(res_data)
+            }
+        }
+    }
+}
+
+/*
+impl WorkerTrait<u64> for Worker {
+    #[inline]
+    fn sender(&self, data: DbTask<u64>) -> Result<(), DbTask<u64>> {
+        self.sender_task::<u64>(data, "alter_db_sender", &self.alter_db_sender)
+    }
+}
+
+impl WorkerTrait<QueryResult> for Worker {
+    #[inline]
+    fn sender(&self, data: DbTask<QueryResult>) -> Result<(), DbTask<QueryResult>> {
+        self.sender_task::<QueryResult>(data, "query_db_sender", &self.query_db_sender)
+    }
+}
+*/
+
+/*
+
 
 pub trait ThreadsTrait<RT> {
     fn sender(&self, data: DbTask<RT>) -> bool;
@@ -26,6 +244,16 @@ pub trait WorkerTrait<RT> {
 
 pub struct Threads {
     pub threads: Vec<Worker>,
+}
+
+impl Drop for Threads {
+    fn drop(&mut self) {
+        for worker in &self.threads {}
+
+        for worker in &self.threads {
+            worker.join();
+        }
+    }
 }
 
 impl Threads {
@@ -142,13 +370,7 @@ impl Worker {
                     Receiver<DbTask<QueryResult>>,
                 ) + Send,
         >,
-    ) -> Result<Self, String>
-/*
-    where
-        F: FnOnce() -> (),
-        F: Send + 'static,
-        //RT: Send + 'static,
-        */ {
+    ) -> Result<Self, String> {
         let (local_alter_db_sender, remote_alter_db_receiver): (
             SyncSender<DbTask<u64>>,
             Receiver<DbTask<u64>>,
@@ -189,6 +411,17 @@ impl Worker {
                 query_db_receiver: local_query_db_receiver,
             }),
             Err(err) => Err(err.to_string()),
+        }
+    }
+
+    pub fn join(&self) {
+        match self.joinHandle.join() {
+            Ok(_) => {
+                wran!("Worker name:{} Exit", self.name);
+            }
+            Err(_) => {
+                error!("Worker name:{} Exit Error", self.name);
+            }
         }
     }
 
@@ -255,3 +488,4 @@ impl WorkerTrait<QueryResult> for Worker {
         self.sender_task::<QueryResult>(data, "query_db_sender", &self.query_db_sender)
     }
 }
+*/
