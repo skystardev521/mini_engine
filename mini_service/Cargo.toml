@@ -1,5 +1,5 @@
 [package]
-name = "test"
+name = "mini_service"
 version = "0.1.0"
 authors = ["root"]
 edition = "2018"
@@ -8,9 +8,5 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.0"
-#net_ = { version = "0.1.0", path = "../engine"}
-mini_socket = { version = "0.1.0", path = "../mini_socket"}
 mini_utils = { version = "0.1.0", path = "../mini_utils"}
-#async-task = "3.0.0"
-# serde = {version = "*", features = ["derive"] }
-# serde_json = "1.0.53"
+mini_socket = { version = "0.1.0", path = "../mini_socket"}

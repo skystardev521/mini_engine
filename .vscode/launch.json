@@ -25,15 +25,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'net_agent'",
+            "name": "Debug executable 'mini_proxy'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=net_agent",
-                    "--package=net_agent"
+                    "--bin=mini_proxy",
+                    "--package=mini_proxy"
                 ],
                 "filter": {
-                    "name": "net_agent",
+                    "name": "mini_proxy",
                     "kind": "bin"
                 }
             },
@@ -44,15 +44,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'net_server'",
+            "name": "Debug executable 'mini_service'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=net_server",
-                    "--package=net_server"
+                    "--bin=mini_service",
+                    "--package=mini_service"
                 ],
                 "filter": {
-                    "name": "net_server",
+                    "name": "mini_service",
                     "kind": "bin"
                 }
             },
@@ -63,15 +63,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'mysqlclient'",
+            "name": "Debug executable 'mini_mysqlclient'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=mysqlclient",
-                    "--package=mysqlclient"
+                    "--bin=mini_mysqlclient",
+                    "--package=mini_mysqlclient"
                 ],
                 "filter": {
-                    "name": "mysqlclient",
+                    "name": "mini_mysqlclient",
                     "kind": "bin"
                 }
             },
@@ -121,16 +121,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'socket'",
+            "name": "Debug unit tests in library 'mini_socket'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=socket"
+                    "--package=mini_socket"
                 ],
                 "filter": {
-                    "name": "socket",
+                    "name": "mini_socket",
                     "kind": "lib"
                 }
             },
@@ -140,16 +140,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'utils'",
+            "name": "Debug unit tests in library 'mini_utils'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=utils"
+                    "--package=mini_utils"
                 ],
                 "filter": {
-                    "name": "utils",
+                    "name": "mini_utils",
                     "kind": "lib"
                 }
             },
@@ -160,16 +160,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'mysqlclient'",
+            "name": "Debug unit tests in library 'mini_mysqlclient'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=mysqlclient"
+                    "--package=mini_mysqlclient"
                 ],
                 "filter": {
-                    "name": "mysqlclient",
+                    "name": "mini_mysqlclient",
                     "kind": "lib"
                 }
             },

@@ -1,17 +1,17 @@
 use log::{error, info, warn};
 
-use socket::message::MsgData;
+use mini_socket::message::MsgData;
 
-use socket::tcp_socket::TcpSocket;
-use socket::tcp_socket_reader::ReadResult;
-use socket::tcp_socket_writer::WriteResult;
+use mini_socket::tcp_socket::TcpSocket;
+use mini_socket::tcp_socket_reader::ReadResult;
+use mini_socket::tcp_socket_writer::WriteResult;
 
 use std::net::Shutdown;
 use std::net::TcpStream;
 use std::thread;
 use std::time::Duration;
 
-use utils::time;
+use mini_utils::time;
 
 const LOG_FILE_DURATION: u64 = 60 * 60 * 1000;
 
