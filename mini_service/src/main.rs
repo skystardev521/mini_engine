@@ -3,7 +3,7 @@ use mini_socket::message::NetMsg;
 use mini_socket::message::ProtoId;
 use mini_socket::tcp_connect_config::TcpConnectConfig;
 use mini_socket::tcp_connect_config::TcpConnectConfigBuilder;
-use mini_socket::tcp_connect_service::TcpConnectServer;
+use mini_socket::tcp_connect_service::TcpConnectService;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -113,11 +113,11 @@ fn net_thread_run(
         };
     };
 
-    let mut tcp_connect_service: TcpConnectServer;
-    match TcpConnectServer::new(&config, &mut net_msg_cb) {
+    let mut tcp_connect_service: TcpConnectService;
+    match TcpConnectService::new(&config, &mut net_msg_cb) {
         Ok(server) => tcp_connect_service = server,
         Err(err) => {
-            error!("TcpConnectServer::new error:{}", err);
+            error!("TcpConnectService::new error:{}", err);
             return;
         }
     }
@@ -136,7 +136,7 @@ fn net_thread_run(
                 }
             }
             Err(err) => {
-                error!("TcpConnectServer epoll_event:{}", err);
+                error!("TcpConnectService epoll_event:{}", err);
                 break;
             }
         }

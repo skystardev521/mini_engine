@@ -22,23 +22,11 @@ pub struct TcpConnectConfig {
     pub reconnect_socket_interval: u16,
 }
 
-#[derive(Debug, Clone)]
-pub struct TcpConnectConfigBuilder {
-    msg_max_size: u32,
-    epoll_max_events: u16,
-    tcp_nodelay_value: bool,
-    socket_read_buffer: u32,
-    socket_write_buffer: u32,
-    wait_write_msg_max_num: u16,
-    single_write_msg_max_num: u16,
-    vec_socket_addr: Vec<String>,
-    connect_timeout_duration: u16,
-    reconnect_socket_interval: u16,
-}
 
-impl TcpConnectConfigBuilder {
+
+impl TcpConnectConfig {
     pub fn new() -> Self {
-        TcpConnectConfigBuilder {
+        TcpConnectConfig {
             msg_max_size: 1024 * 32,
             epoll_max_events: 256,
             tcp_nodelay_value: false,
@@ -95,20 +83,5 @@ impl TcpConnectConfigBuilder {
     pub fn set_reconnect_socket_interval(&mut self, val: u16) -> &mut Self {
         self.reconnect_socket_interval = val;
         self
-    }
-
-    pub fn builder(&self) -> TcpConnectConfig {
-        TcpConnectConfig {
-            msg_max_size: self.msg_max_size,
-            epoll_max_events: self.epoll_max_events,
-            tcp_nodelay_value: self.tcp_nodelay_value,
-            socket_read_buffer: self.socket_read_buffer,
-            socket_write_buffer: self.socket_write_buffer,
-            wait_write_msg_max_num: self.wait_write_msg_max_num,
-            single_write_msg_max_num: self.single_write_msg_max_num,
-            vec_socket_addr: self.vec_socket_addr.clone(),
-            connect_timeout_duration: self.connect_timeout_duration,
-            reconnect_socket_interval: self.reconnect_socket_interval,
-        }
     }
 }

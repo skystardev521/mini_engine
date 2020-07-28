@@ -27,12 +27,14 @@ impl<MysqlResult> QueryResult<MysqlResult> {
         unsafe { ffi::mysql_fetch_row(self.0 as *mut ffi::MYSQL_RES) }
     }
     #[inline]
+    #[allow(dead_code)]
     /// 结果集的列  field.name
     pub fn fetch_field(&self) -> MysqlField {
         unsafe { ffi::mysql_fetch_field(self.0 as *mut ffi::MYSQL_RES) }
     }
 
     #[inline]
+    #[allow(dead_code)]
     /// 结果集的列数组  field[0].name
     pub fn fetch_fields(&self) -> MysqlField {
         unsafe { ffi::mysql_fetch_fields(self.0 as *mut ffi::MYSQL_RES) }

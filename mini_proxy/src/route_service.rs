@@ -4,27 +4,28 @@ use mini_socket::message::NetMsg;
 use mini_socket::message::ProtoId;
 use std::thread;
 
-pub struct Service<'a> {
+/// 用于把 广域网的数据 转到 局域网服务
+pub struct RouteService<'a> {
     config: &'a Config,
     net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
-impl<'a> Drop for Service<'a> {
+impl<'a> Drop for RouteService<'a> {
     fn drop(&mut self) {
         if thread::panicking() {
-            error!("dropped mini_proxy service while unwinding");
+            error!("dropped mini_proxy RouteService while unwinding");
         } else {
-            error!("dropped mini_proxy service while not unwinding");
+            error!("dropped mini_proxy RouteService while not unwinding");
         }
     }
 }
 
-impl<'a> Service<'a> {
+impl<'a> RouteService<'a> {
     pub fn new(
         config: &'a Config,
         net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
     ) -> Self {
-        Service { config, net_msg_cb }
+        RouteService { config, net_msg_cb }
     }
 
     pub fn new_net_msg(&mut self, net_msg: NetMsg) {

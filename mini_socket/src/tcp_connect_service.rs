@@ -24,7 +24,7 @@ use crate::tcp_socket::TcpSocket;
 
 const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
-pub struct TcpConnectServer<'a> {
+pub struct TcpConnectService<'a> {
     os_epoll: OSEpoll,
     config: &'a TcpConnectConfig,
     tcp_connect_mgmt: TcpConnectMgmt<'a>,
@@ -32,17 +32,17 @@ pub struct TcpConnectServer<'a> {
     net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
-impl<'a> Drop for TcpConnectServer<'a> {
+impl<'a> Drop for TcpConnectService<'a> {
     fn drop(&mut self) {
         if thread::panicking() {
-            error!("dropped TcpConnectServer while unwinding");
+            error!("dropped TcpConnectService while unwinding");
         } else {
-            error!("dropped TcpConnectServer while not unwinding");
+            error!("dropped TcpConnectService while not unwinding");
         }
     }
 }
 
-impl<'a> TcpConnectServer<'a> {
+impl<'a> TcpConnectService<'a> {
     pub fn new(
         config: &'a TcpConnectConfig,
         net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
@@ -51,7 +51,7 @@ impl<'a> TcpConnectServer<'a> {
 
         let tcp_connect_mgmt = TcpConnectMgmt::new(config)?;
 
-        Ok(TcpConnectServer {
+        Ok(TcpConnectService {
             os_epoll,
             config,
             net_msg_cb,

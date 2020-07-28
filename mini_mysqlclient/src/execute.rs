@@ -3,20 +3,20 @@ use crate::connect::Connect;
 use crate::task::TaskEnum;
 use log::{error, warn};
 use std::collections::HashMap;
-
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::TrySendError;
 use std::time::Duration;
 
-pub enum RecvRes {
+pub(crate) enum RecvRes {
     Empty,
     TaskData,
     ExitThread,
 }
 
-pub struct TaskMgmt {
+/// 读取Task执行sql语句反回任务结果
+pub(crate) struct Execute {
     name: String,
     sleep_duration: Duration,
     receiver: Receiver<TaskEnum>,
@@ -24,14 +24,14 @@ pub struct TaskMgmt {
     conn_hm: HashMap<String, Connect>,
 }
 
-impl TaskMgmt {
+impl Execute {
     pub fn new(
         name: String,
         sleep_duration: Duration,
         receiver: Receiver<TaskEnum>,
         sender: SyncSender<TaskEnum>,
     ) -> Self {
-        TaskMgmt {
+        Execute {
             name,
             sender,
             receiver,
@@ -41,24 +41,24 @@ impl TaskMgmt {
     }
 
     pub fn connect(&mut self, vec_config: Vec<ConnConfig>) {
-        for cfg in vec_config {
-            let db = match cfg.get_database() {
+        for config in vec_config {
+            let db = match config.get_database() {
                 Some(val) => val.to_string_lossy().to_string(),
                 None => {
                     error!("database config database is null");
                     continue;
                 }
             };
-            let host = match cfg.get_host() {
+            let host = match config.get_host() {
                 Some(val) => val.to_string_lossy().to_string(),
                 None => {
                     error!("database config host is null");
                     continue;
                 }
             };
-            let database = format!("{}_{}_{}", db, host, cfg.get_port());
+            let database = format!("{}_{}_{}", db, host, config.get_port());
 
-            match Connect::new(cfg) {
+            match Connect::new(config) {
                 Ok(conn) => match conn.connect() {
                     Ok(()) => {
                         println!("connect database:{} Succ", database);
@@ -97,10 +97,6 @@ impl TaskMgmt {
                     self.sender(TaskEnum::AlterTask(task));
                 }
                 return RecvRes::TaskData;
-            }
-            Ok(TaskEnum::ExitThread) => {
-                warn!("Worker name:{} receiver TaskEnum::ExitThread", self.name);
-                return RecvRes::ExitThread;
             }
             Err(TryRecvError::Disconnected) => {
                 warn!("Worker name:{} receiver Disconnected", self.name);

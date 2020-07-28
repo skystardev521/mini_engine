@@ -1,8 +1,6 @@
 use crate::result::MysqlResult;
 use crate::result::QueryResult;
-
 pub enum TaskEnum {
-    ExitThread,
     AlterTask(Task<u64>),
     QueryTask(Task<QueryResult<MysqlResult>>),
 }

@@ -22,7 +22,7 @@ use crate::tcp_socket::TcpSocket;
 const TCP_LISTEN_ID: u64 = 0;
 const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
-pub struct TcpListenServer<'a> {
+pub struct TcpListenService<'a> {
     os_epoll: OSEpoll,
     tcp_listen: TcpListen,
     config: &'a TcpListenConfig,
@@ -31,17 +31,17 @@ pub struct TcpListenServer<'a> {
     net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
-impl<'a> Drop for TcpListenServer<'a> {
+impl<'a> Drop for TcpListenService<'a> {
     fn drop(&mut self) {
         if thread::panicking() {
-            error!("dropped TcpListenServer while unwinding");
+            error!("dropped TcpListenService while unwinding");
         } else {
-            error!("dropped TcpListenServer while not unwinding");
+            error!("dropped TcpListenService while not unwinding");
         }
     }
 }
 
-impl<'a> TcpListenServer<'a> {
+impl<'a> TcpListenService<'a> {
     pub fn new(
         config: &'a TcpListenConfig,
         net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
@@ -62,7 +62,7 @@ impl<'a> TcpListenServer<'a> {
             config.wait_write_msg_max_num,
         )?;
 
-        Ok(TcpListenServer {
+        Ok(TcpListenService {
             os_epoll,
             config,
             tcp_listen,

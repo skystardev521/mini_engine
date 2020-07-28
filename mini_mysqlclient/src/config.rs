@@ -1,101 +1,108 @@
 use std::ffi::{CStr, CString};
 use std::time::Duration;
+
 #[derive(Clone)]
-pub struct ThreadConfig {
-    name: String,
-    thread_num: u8,
-    stack_size: usize,
-    channel_size: u16,
-    receiver_max_num: u16,
-    ping_duration: Duration,
-    sleep_duration: Duration,
-    //vec_conn_config: Vec<ConnConfig>,
+pub struct Config {
+    pub workers_config: WorkersConfig,
+    pub vec_connect_config: Vec<ConnConfig>,
 }
 
-impl ThreadConfig {
+impl Config {
+    pub fn new(workers_config: WorkersConfig, vec_connect_config: Vec<ConnConfig>) -> Self {
+        Config {
+            workers_config,
+            vec_connect_config,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct WorkersConfig {
+    name: String,
+    worker_num: u8,
+    stack_size: usize,
+    channel_size: u16,
+    ping_interval: Duration,
+    sleep_duration: Duration,
+    single_max_task_num: u16,
+}
+
+impl WorkersConfig {
     pub fn new() -> Self {
-        ThreadConfig {
-            thread_num: 2,
+        WorkersConfig {
+            worker_num: 2,
             stack_size: 0,
             channel_size: 1024,
-            receiver_max_num: 1024,
+            single_max_task_num: 1024,
             name: String::from("mysql"),
-            ping_duration: Duration::from_secs(300),
+            ping_interval: Duration::from_secs(300),
             sleep_duration: Duration::from_millis(1),
-            //vec_conn_config: vec![],
         }
     }
 
-    pub fn get_thread_num(&self) -> u8 {
-        self.thread_num
+    /// 设置worker数量
+    pub fn get_worker_num(&self) -> u8 {
+        self.worker_num
     }
-
+    /// 线程的栈大小 0:使用系统默认大小
     pub fn get_stack_size(&self) -> usize {
         self.stack_size
     }
-
+    /// 每个worker间通信任务队列数量
     pub fn get_channel_size(&self) -> u16 {
         self.channel_size
     }
-
-    pub fn get_receiver_max_num(&self) -> u16 {
-        self.receiver_max_num
+    /// 每个worker单次处理最大任务数量
+    pub fn get_single_max_task_num(&self) -> u16 {
+        self.single_max_task_num
     }
-    /// sec
-    pub fn get_ping_duration(&self) -> Duration {
-        self.ping_duration
+    /// ping mysql connect 间隔 单位sec
+    pub fn get_ping_interval(&self) -> Duration {
+        self.ping_interval
     }
 
-    /// millis
+    /// 空闲时worker休眠时长
     pub fn get_sleep_duration(&self) -> Duration {
         self.sleep_duration
     }
 
-    /*
-    pub fn get_conn_config(&self) -> &Vec<ConnConfig> {
-        &self.vec_conn_config
-    }
-    */
-
-    pub fn set_thread_num(&mut self, num: u8) -> &mut Self {
-        self.thread_num = if num == 0 { 1 } else { num };
+    /// 设置worker数量
+    pub fn set_worker_num(&mut self, num: u8) -> &mut Self {
+        self.worker_num = if num == 0 { 1 } else { num };
         self
     }
+
+    /// 线程的栈大小 0:使用系统默认大小
     pub fn set_stack_size(&mut self, num: usize) -> &mut Self {
         self.stack_size = num;
         self
     }
 
+    /// 每个worker间通信任务队列数量
     pub fn set_channel_size(&mut self, num: u16) -> &mut Self {
         self.channel_size = if num < 128 { 128 } else { num };
         self
     }
 
-    pub fn set_receiver_max_num(&mut self, num: u16) -> &mut Self {
-        self.receiver_max_num = if num < 128 { 128 } else { num };
+    /// 每个worker单次处理最大任务数量
+    pub fn set_single_max_task_num(&mut self, num: u16) -> &mut Self {
+        self.single_max_task_num = if num < 128 { 128 } else { num };
         self
     }
 
-    /// sec
-    pub fn set_ping_duration(&mut self, num: u16) -> &mut Self {
+    /// ping mysql connect 间隔 单位sec
+    pub fn set_ping_interval(&mut self, num: u16) -> &mut Self {
         let n = if num == 0 { 1 } else { num } as u64;
-        self.ping_duration = Duration::from_secs(n);
+        self.ping_interval = Duration::from_secs(n);
         self
     }
 
-    /// millis
+    /// 空闲时worker休眠时长
     pub fn set_sleep_duration(&mut self, num: u16) -> &mut Self {
         let n = if num == 0 { 1 } else { num } as u64;
         self.sleep_duration = Duration::from_millis(n);
         self
     }
-
-    /*
-    pub fn set_conn_config(&mut self, vec_conn_config: Vec<ConnConfig>) -> &mut Self {
-        self.vec_conn_config = vec_conn_config;
-        self
-    }
-    */
 }
 
 #[derive(Clone)]
@@ -188,30 +195,4 @@ impl ConnConfig {
         }
         return self;
     }
-
-    /*
-    pub fn set_unix_socket(&mut self, unix_socket: &String) -> &mut Self {
-        if unix_socket.is_empty() {
-            return self;
-        }
-        if let Ok(val) = CString::new(unix_socket.as_bytes()) {
-            self.unix_socket = Some(val);
-        }
-        return self;
-    }
-    */
 }
-/*
-fn decode_into_cstring(s: &str) -> ConnectionResult<CString> {
-    let decoded = percent_decode(s.as_bytes())
-        .decode_utf8()
-        .map_err(|_| connection_url_error())?;
-    CString::new(decoded.as_bytes()).map_err(Into::into)
-}
-
-fn connection_url_error() -> ConnectionError {
-    let msg = "MySQL connection URLs must be in the form \
-               `mysql://[[user]:[password]@]host[:port][/database][?unix_socket=socket-path]`";
-    ConnectionError::InvalidConnectionUrl(msg.into())
-}
-*/

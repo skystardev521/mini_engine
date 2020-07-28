@@ -12,23 +12,10 @@ pub struct TcpListenConfig {
     pub wait_write_msg_max_num: u16,
     pub single_write_msg_max_num: u16,
 }
-#[derive(Debug, Clone)]
-pub struct TcpListenConfigBuilder {
-    msg_max_size: u32,
-    max_tcp_socket: u32,
-    epoll_max_events: u16,
-    tcp_nodelay_value: bool,
-    epoll_wait_timeout: i32,
-    bind_socket_addr: String,
-    socket_read_buffer: u32,
-    socket_write_buffer: u32,
-    wait_write_msg_max_num: u16,
-    single_write_msg_max_num: u16,
-}
 
-impl TcpListenConfigBuilder {
+impl TcpListenConfig {
     pub fn new() -> Self {
-        TcpListenConfigBuilder {
+        TcpListenConfig {
             msg_max_size: 16384,
             max_tcp_socket: 10240,
             epoll_max_events: 256,
@@ -90,20 +77,5 @@ impl TcpListenConfigBuilder {
     pub fn set_single_write_msg_max_num(&mut self, val: u16) -> &mut Self {
         self.single_write_msg_max_num = val;
         self
-    }
-
-    pub fn builder(&self) -> TcpListenConfig {
-        TcpListenConfig {
-            msg_max_size: self.msg_max_size,
-            max_tcp_socket: self.max_tcp_socket,
-            tcp_nodelay_value: self.tcp_nodelay_value,
-            epoll_max_events: self.epoll_max_events,
-            epoll_wait_timeout: self.epoll_wait_timeout,
-            socket_read_buffer: self.socket_read_buffer,
-            socket_write_buffer: self.socket_write_buffer,
-            bind_socket_addr: self.bind_socket_addr.clone(),
-            wait_write_msg_max_num: self.wait_write_msg_max_num,
-            single_write_msg_max_num: self.single_write_msg_max_num,
-        }
     }
 }

@@ -1,50 +1,46 @@
-use crate::config::ConnConfig;
-use crate::config::ThreadConfig;
-use crate::task::TaskEnum;
+use crate::config::Config;
+
 use mini_utils::time;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::thread;
 
-use crate::task_mgmt::RecvRes;
-use crate::task_mgmt::TaskMgmt;
-use crate::thread_pool::ThreadPool;
-use crate::thread_pool::Worker;
+use crate::execute::Execute;
+use crate::execute::RecvRes;
+use crate::task::TaskEnum;
+use crate::workers::Workers;
+use mini_utils::worker::Worker;
 
 use log::error;
 
 pub struct Service {
-    thread_pool: ThreadPool,
-    thread_config: ThreadConfig,
-    vec_conn_config: Vec<ConnConfig>,
+    workers: Workers,
 }
 
+/// 发送Task接收Task结果
 impl Service {
-    pub fn new(thread_config: ThreadConfig, vec_conn_config: Vec<ConnConfig>) -> Self {
-        let mut thread_config = thread_config;
-        let mut thread_num = thread_config.get_thread_num();
-        if thread_num == 0 {
-            thread_num = 1;
-            thread_config.set_thread_num(1);
-        }
-        Service {
-            thread_config,
-            vec_conn_config,
-            thread_pool: ThreadPool::new(thread_num),
-        }
+    pub fn new(config: Config) -> Result<Self, String> {
+        let worker_num = config.workers_config.get_worker_num();
+        let single_max_task_num = config.workers_config.get_single_max_task_num();
+        let mut service = Service {
+            workers: Workers::new(worker_num, single_max_task_num),
+        };
+        service.init(config)?;
+        Ok(service)
     }
 
-    pub fn init(&mut self) -> Result<(), String> {
-        for i in 0..self.thread_config.get_thread_num() {
+    fn init(&mut self, config: Config) -> Result<(), String> {
+        let worker_num = config.workers_config.get_worker_num();
+        for i in 0..worker_num {
             let name = format!("mysqlclient_{}", i);
             match Worker::new(
                 name.clone(),
-                self.thread_config.clone(),
-                self.vec_conn_config.clone(),
-                thread_closure(name.clone()),
+                config.workers_config.get_stack_size(),
+                config.workers_config.get_channel_size(),
+                worker_closure(name.clone(), config.clone()),
             ) {
                 Ok(worker) => {
-                    self.thread_pool.push(worker);
+                    self.workers.push(worker);
                 }
                 Err(err) => {
                     error!("Worker::new error:{}", err);
@@ -55,40 +51,41 @@ impl Service {
         Ok(())
     }
 
-    pub fn recv_task(&mut self) {
-        self.thread_pool.receiver();
+    pub fn receiver(&mut self) {
+        self.workers.receiver();
     }
 
     pub fn sender(&mut self, task_enum: TaskEnum) -> bool {
-        self.thread_pool.sender(task_enum)
+        self.workers.sender(task_enum)
     }
 }
 
-fn thread_closure(
+fn worker_closure(
     name: String,
-) -> Box<dyn FnOnce(ThreadConfig, Vec<ConnConfig>, Receiver<TaskEnum>, SyncSender<TaskEnum>) + Send>
-{
+    config: Config,
+) -> Box<dyn FnOnce(Receiver<TaskEnum>, SyncSender<TaskEnum>) + Send> {
     Box::new(
-        |thread_config: ThreadConfig,
-         conn_config: Vec<ConnConfig>,
-         receiver: Receiver<TaskEnum>,
-         sender: SyncSender<TaskEnum>| {
-            let mut task_mgmt =
-                TaskMgmt::new(name, thread_config.get_sleep_duration(), receiver, sender);
+        move |receiver: Receiver<TaskEnum>, sender: SyncSender<TaskEnum>| {
+            let mut execute = Execute::new(
+                name,
+                config.workers_config.get_sleep_duration(),
+                receiver,
+                sender,
+            );
 
-            task_mgmt.connect(conn_config);
+            execute.connect(config.vec_connect_config);
 
-            let mut last_ping_ts = time::timestamp();
-            let ping_duration = thread_config.get_ping_duration().as_secs();
+            let mut last_ping_timestamp = time::timestamp();
+            let ping_interval = config.workers_config.get_ping_interval().as_secs();
 
             loop {
-                match task_mgmt.receiver() {
+                match execute.receiver() {
                     RecvRes::Empty => {
-                        if last_ping_ts + ping_duration < time::timestamp() {
-                            task_mgmt.ping_connect();
-                            last_ping_ts = time::timestamp();
+                        if last_ping_timestamp + ping_interval < time::timestamp() {
+                            execute.ping_connect();
+                            last_ping_timestamp = time::timestamp();
                         }
-                        thread::sleep(thread_config.get_sleep_duration());
+                        thread::sleep(config.workers_config.get_sleep_duration());
                     }
                     RecvRes::TaskData => {
                         continue;
@@ -116,10 +113,10 @@ use crate::config::ThreadConfig;
 
 
 pub fn test() {
-    let mut thread_config = ThreadConfig::new();
+    let mut workers_config = ThreadConfig::new();
     let mut vec_conn_config: Vec<ConnConfig> = Vec::new();
 
-    thread_config.set_sleep_duration(1000).set_thread_num(5);
+    workers_config.set_sleep_duration(1000).set_worker_num(5);
 
     for i in 0..10 {
         let mut config = ConnConfig::new();
@@ -130,7 +127,7 @@ pub fn test() {
         vec_conn_config.push(config);
     }
 
-    let mut service = Service::new(thread_config, vec_conn_config);
+    let mut service = Service::new(workers_config, vec_conn_config);
     service.init();
 
     let database = format!("{}_{}_{}", "dev_db", "127.0.0.1", 3306);

@@ -6,9 +6,8 @@ pub mod task;
 pub mod result;
 
 pub(crate) mod connect;
-pub(crate) mod task_mgmt;
-pub(crate) mod thread_pool;
-
+pub(crate) mod execute;
+pub(crate) mod workers;
 
 #[cfg(test)]
 mod tests {

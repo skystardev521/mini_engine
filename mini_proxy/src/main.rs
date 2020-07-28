@@ -2,8 +2,7 @@ use log::error;
 use mini_socket::message::NetMsg;
 use mini_socket::message::ProtoId;
 use mini_socket::tcp_listen_config::TcpListenConfig;
-use mini_socket::tcp_listen_config::TcpListenConfigBuilder;
-use mini_socket::tcp_listen_service::TcpListenServer;
+use mini_socket::tcp_listen_service::TcpListenService;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -15,9 +14,13 @@ use std::time::Duration;
 
 use mini_utils::logger::Logger;
 
-use mini_proxy::Config;
-use mini_proxy::ConfigBuilder;
-use mini_proxy::Service;
+use crate::wan_service::WanService;
+use config::ProxyConfig;
+use config::WorkerConfig;
+
+mod config;
+mod wan_service;
+mod worker;
 
 use mini_utils::time;
 
@@ -39,8 +42,8 @@ fn main() {
         }
     }
 
-    let config: Config;
-    match read_server_config("config.txt".into()) {
+    let config: ProxyConfig;
+    match read_proxy_config("config.txt".into()) {
         Ok(cfg) => config = cfg,
         Err(err) => {
             error!("Config error:{}", err);
@@ -48,6 +51,7 @@ fn main() {
         }
     }
 
+    /*
     let channel_size = 10000;
 
     let net_builder = thread::Builder::new().name("Net".into()); //.stack_size(stack_size);
@@ -67,6 +71,7 @@ fn main() {
         agent_thread_run(&config, agent_receiver, agent_sync_sender);
     });
 
+    */
     loop {
         thread::sleep(Duration::from_secs(60));
 
@@ -78,17 +83,14 @@ fn main() {
 }
 
 fn read_tcp_server_config(_path: String) -> Result<TcpListenConfig, String> {
-    let config_builder = TcpListenConfigBuilder::new();
-    let config = config_builder.builder();
-    Ok(config)
+    Ok(TcpListenConfig::new())
 }
 
-fn read_server_config(_path: String) -> Result<Config, String> {
-    let config_builder = ConfigBuilder::new();
-    let config = config_builder.builder();
-    Ok(config)
+fn read_proxy_config(_path: String) -> Result<ProxyConfig, String> {
+    Ok(ProxyConfig::new(String::from("proxy"), WorkerConfig::new()))
 }
 
+/*
 fn net_thread_run(
     config: &TcpListenConfig,
     receiver: Receiver<NetMsg>,
@@ -108,11 +110,11 @@ fn net_thread_run(
         };
     };
 
-    let mut tcp_listen_service: TcpListenServer;
-    match TcpListenServer::new(&config, &mut net_msg_cb) {
+    let mut tcp_listen_service: TcpListenService;
+    match TcpListenService::new(&config, &mut net_msg_cb) {
         Ok(server) => tcp_listen_service = server,
         Err(err) => {
-            error!("TcpListenServer::new error:{}", err);
+            error!("TcpListenService::new error:{}", err);
             return;
         }
     }
@@ -131,7 +133,7 @@ fn net_thread_run(
                 }
             }
             Err(err) => {
-                error!("TcpListenServer epoll_event:{}", err);
+                error!("TcpListenService epoll_event:{}", err);
                 break;
             }
         }
@@ -161,7 +163,11 @@ fn net_thread_run(
     }
 }
 
-fn agent_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: SyncSender<NetMsg>) {
+fn agent_thread_run(
+    config: &ProxyConfig,
+    receiver: Receiver<NetMsg>,
+    sync_sender: SyncSender<NetMsg>,
+) {
     let mut net_msg_cb = |net_msg: NetMsg| match sync_sender.try_send(net_msg) {
         Ok(()) => return Ok(()),
         Err(TrySendError::Full(_)) => {
@@ -175,18 +181,18 @@ fn agent_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: Sy
     };
     let mut server = Service::new(&config, &mut net_msg_cb);
 
-    let mut single_read_msg_count;
-
+    let mut single_task_num;
     let timeout_duration = Duration::from_millis(1);
+    let single_max_task_num = config.worker_config.get_single_max_task_num();
 
     'next_loop: loop {
         server.tick();
-        single_read_msg_count = 0;
+        single_task_num = 0;
         match receiver.recv_timeout(timeout_duration) {
             Ok(net_msg) => {
                 server.new_net_msg(net_msg);
-                single_read_msg_count += 1;
-                if single_read_msg_count == config.single_read_msg_max_num {
+                single_task_num += 1;
+                if single_task_num == single_max_task_num {
                     continue 'next_loop;
                 }
             }
@@ -199,3 +205,4 @@ fn agent_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: Sy
         }
     }
 }
+*/

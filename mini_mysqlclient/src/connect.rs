@@ -7,6 +7,7 @@ use std::os::raw;
 use std::ptr::{self, NonNull};
 //use std::sync::Once;
 
+//www.mysqlzh.com/api/66.html
 /// 查询过程中丢失了与MySQL服务器的连接
 pub const CR_SERVER_LOST: u32 = 2013;
 
@@ -15,14 +16,6 @@ pub const CR_CONN_HOST_ERROR: u32 = 2003;
 
 /// MySQL服务器不可用
 pub const CR_SERVER_GONE_ERROR: u32 = 2006;
-
-//www.mysqlzh.com/api/66.html
-
-pub struct Connect {
-    config: ConnConfig,
-    mysql: NonNull<ffi::MYSQL>,
-    //mysql_res: Cell<MysqlRes>,
-}
 
 /*
 //用于运行一次性全局初始化
@@ -58,6 +51,11 @@ fn init() -> Result<NonNull<ffi::MYSQL>, String> {
     }
 }
 
+pub struct Connect {
+    config: ConnConfig,
+    mysql: NonNull<ffi::MYSQL>,
+}
+
 impl Drop for Connect {
     fn drop(&mut self) {
         unsafe {
@@ -85,7 +83,6 @@ impl Connect {
         if charset_result != 0 {
             return Err("mysql set utf8mb4 error".into());
         }
-
         Ok(mysql)
     }
 
@@ -185,8 +182,8 @@ impl Connect {
         }
         return Err(self.last_error());
     }
-
     #[inline]
+    #[allow(dead_code)]
     pub fn insert_id(&self) -> u64 {
         unsafe { ffi::mysql_insert_id(self.mysql.as_ptr()) as u64 }
     }
@@ -198,8 +195,9 @@ impl Connect {
     }
 
     #[inline]
+    #[allow(dead_code)]
     /// 使 二进制或字符串 转成 合法SQL字符串
-    pub fn real_escape_string(&self, vec_data: &Vec<u8>) -> String {
+    pub fn real_escape_string(&self, vec_data: &[u8]) -> String {
         let res = vec![0u8; vec_data.len() * 2 + 1];
         let res_len = unsafe {
             ffi::mysql_real_escape_string(
