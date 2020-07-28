@@ -3,7 +3,7 @@ pub mod service;
 pub mod sql_task;
 
 #[macro_use]
-pub mod query_result;
+pub mod qresult;
 
 pub(crate) mod connect;
 pub(crate) mod execute;

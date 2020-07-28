@@ -1,5 +1,5 @@
-use crate::query_result::MysqlResult;
-use crate::query_result::QueryResult;
+use crate::qresult::MysqlResult;
+use crate::qresult::QueryResult;
 pub enum SqlTaskEnum {
     AlterTask(SqlTask<u64>),
     QueryTask(SqlTask<QueryResult<MysqlResult>>),

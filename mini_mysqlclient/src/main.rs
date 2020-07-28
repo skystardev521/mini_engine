@@ -2,9 +2,9 @@ use mini_utils::logger::Logger;
 use mini_utils::time;
 use std::ptr::{self};
 
-use crate::query_result::CellValue;
-use crate::query_result::MysqlResult;
-use crate::query_result::QueryResult;
+use crate::qresult::CellValue;
+use crate::qresult::MysqlResult;
+use crate::qresult::QueryResult;
 
 use crate::config::Config;
 use crate::config::ConnConfig;
@@ -14,7 +14,7 @@ use crate::sql_task::SqlTaskEnum;
 use mini_utils::worker_config::WorkerConfig;
 
 #[macro_use]
-mod query_result;
+mod qresult;
 mod config;
 mod connect;
 mod execute;
