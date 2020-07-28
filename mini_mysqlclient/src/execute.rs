@@ -1,7 +1,7 @@
 use crate::config::ConnConfig;
 use crate::connect::Connect;
 use crate::sql_task::SqlTaskEnum;
-use log::{error, warn};
+use log::error;
 use std::collections::HashMap;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
@@ -83,7 +83,7 @@ impl Execute {
                     sql_task.result = conn.query_data(&sql_task.sql_str);
                     self.sender(SqlTaskEnum::QueryTask(sql_task));
                 } else {
-                    sql_task.result = Err("database not exist".into());
+                    sql_task.result = Err("db not exist".into());
                     self.sender(SqlTaskEnum::QueryTask(sql_task));
                 }
                 return RecvRes::TaskData;
@@ -93,13 +93,13 @@ impl Execute {
                     sql_task.result = conn.alter_data(&sql_task.sql_str);
                     self.sender(SqlTaskEnum::AlterTask(sql_task));
                 } else {
-                    sql_task.result = Err("database not exist".into());
+                    sql_task.result = Err("db not exist".into());
                     self.sender(SqlTaskEnum::AlterTask(sql_task));
                 }
                 return RecvRes::TaskData;
             }
             Err(TryRecvError::Disconnected) => {
-                warn!("Worker name:{} receiver Disconnected", self.name);
+                error!("Worker Name:{} Receiver Disconnected", self.name);
                 return RecvRes::ExitThread;
             }
         }
@@ -119,10 +119,10 @@ impl Execute {
                 Err(TrySendError::Full(res_msg)) => {
                     new_msg = res_msg;
                     std::thread::sleep(self.sleep_duration);
-                    warn!("Worker name:{} sender Full", self.name);
+                    error!("Worker Name:{} Sender Full", self.name);
                 }
                 Err(TrySendError::Disconnected(_)) => {
-                    error!("Worker name:{} sender Disconnected", self.name);
+                    error!("Worker Name:{} Sender Disconnected", self.name);
                     return;
                 }
             }
