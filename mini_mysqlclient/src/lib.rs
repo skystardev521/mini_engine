@@ -1,18 +1,10 @@
 pub mod config;
 pub mod service;
-pub mod task;
+pub mod sql_task;
 
 #[macro_use]
-pub mod result;
+pub mod query_result;
 
 pub(crate) mod connect;
 pub(crate) mod execute;
 pub(crate) mod workers;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}

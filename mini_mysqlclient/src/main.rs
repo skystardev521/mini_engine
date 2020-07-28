@@ -2,24 +2,24 @@ use mini_utils::logger::Logger;
 use mini_utils::time;
 use std::ptr::{self};
 
-use crate::result::CellValue;
-use crate::result::MysqlResult;
-use crate::result::QueryResult;
+use crate::query_result::CellValue;
+use crate::query_result::MysqlResult;
+use crate::query_result::QueryResult;
 
 use crate::config::Config;
 use crate::config::ConnConfig;
-use crate::config::WorkersConfig;
 use crate::service::Service;
-use crate::task::Task;
-use crate::task::TaskEnum;
+use crate::sql_task::SqlTask;
+use crate::sql_task::SqlTaskEnum;
+use mini_utils::worker_config::WorkerConfig;
 
 #[macro_use]
-mod result;
+mod query_result;
 mod config;
 mod connect;
 mod execute;
 mod service;
-mod task;
+mod sql_task;
 mod workers;
 
 fn main() {
@@ -32,21 +32,23 @@ fn main() {
 }
 
 pub fn test() {
-    let mut workers_config = WorkersConfig::new();
+    let mut workers_config = WorkerConfig::new();
     let mut vec_conn_config: Vec<ConnConfig> = Vec::new();
 
-    workers_config.set_sleep_duration(1000).set_worker_num(5);
+    workers_config.set_sleep_duration(1);
 
     for _i in 0..10 {
         let mut config = ConnConfig::new();
-        config.set_host(&"127.0.0.1".into());
-        config.set_user(&"root".into());
-        config.set_password(&"root".into());
-        config.set_database(&"dev_db".into());
+        config
+            .set_host(&"127.0.0.1".into())
+            .set_user(&"root".into())
+            .set_password(&"root".into())
+            .set_database(&"dev_db".into());
         vec_conn_config.push(config);
     }
 
-    let config = Config::new(workers_config, vec_conn_config);
+    let worker_num = 3;
+    let config = Config::new(worker_num, workers_config, vec_conn_config);
 
     let mut service = Service::new(config).unwrap();
 
@@ -56,7 +58,7 @@ pub fn test() {
             "insert into test (id,name,text,bin)values({},'name{}','text{}',{:b});",
             i, i, i, i
         );
-        let alter_task: Task<u64> = Task::new(
+        let alter_task: SqlTask<u64> = SqlTask::new(
             sql_str,
             database.clone(),
             Box::new(|result: Result<u64, String>| match result {
@@ -69,14 +71,14 @@ pub fn test() {
             }),
         );
 
-        service.sender(TaskEnum::AlterTask(alter_task));
+        service.sender(SqlTaskEnum::AlterTask(alter_task));
     }
 
     for _ in 1..5 {
         let sql_str = "SELECT * FROM dev_db.test LIMIT 2;".into();
         let database = format!("{}_{}_{}", "dev_db", "127.0.0.1", 3306);
 
-        let query_task: Task<QueryResult<MysqlResult>> = Task::new(
+        let query_task: SqlTask<QueryResult<MysqlResult>> = SqlTask::new(
             sql_str,
             database,
             Box::new(
@@ -97,7 +99,7 @@ pub fn test() {
             ),
         );
 
-        service.sender(TaskEnum::QueryTask(query_task));
+        service.sender(SqlTaskEnum::QueryTask(query_task));
     }
 
     loop {

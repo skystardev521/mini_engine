@@ -22,8 +22,6 @@ pub struct TcpConnectConfig {
     pub reconnect_socket_interval: u16,
 }
 
-
-
 impl TcpConnectConfig {
     pub fn new() -> Self {
         TcpConnectConfig {

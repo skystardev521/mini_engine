@@ -1,6 +1,6 @@
 use crate::config::ConnConfig;
 use crate::connect::Connect;
-use crate::task::TaskEnum;
+use crate::sql_task::SqlTaskEnum;
 use log::{error, warn};
 use std::collections::HashMap;
 use std::sync::mpsc::Receiver;
@@ -19,8 +19,8 @@ pub(crate) enum RecvRes {
 pub(crate) struct Execute {
     name: String,
     sleep_duration: Duration,
-    receiver: Receiver<TaskEnum>,
-    sender: SyncSender<TaskEnum>,
+    receiver: Receiver<SqlTaskEnum>,
+    sender: SyncSender<SqlTaskEnum>,
     conn_hm: HashMap<String, Connect>,
 }
 
@@ -28,8 +28,8 @@ impl Execute {
     pub fn new(
         name: String,
         sleep_duration: Duration,
-        receiver: Receiver<TaskEnum>,
-        sender: SyncSender<TaskEnum>,
+        receiver: Receiver<SqlTaskEnum>,
+        sender: SyncSender<SqlTaskEnum>,
     ) -> Self {
         Execute {
             name,
@@ -78,23 +78,23 @@ impl Execute {
             Err(TryRecvError::Empty) => {
                 return RecvRes::Empty;
             }
-            Ok(TaskEnum::QueryTask(mut task)) => {
-                if let Some(conn) = self.conn_hm.get(&task.database) {
-                    task.result = conn.query_data(&task.sql_str);
-                    self.sender(TaskEnum::QueryTask(task));
+            Ok(SqlTaskEnum::QueryTask(mut sql_task)) => {
+                if let Some(conn) = self.conn_hm.get(&sql_task.database) {
+                    sql_task.result = conn.query_data(&sql_task.sql_str);
+                    self.sender(SqlTaskEnum::QueryTask(sql_task));
                 } else {
-                    task.result = Err("database not exist".into());
-                    self.sender(TaskEnum::QueryTask(task));
+                    sql_task.result = Err("database not exist".into());
+                    self.sender(SqlTaskEnum::QueryTask(sql_task));
                 }
                 return RecvRes::TaskData;
             }
-            Ok(TaskEnum::AlterTask(mut task)) => {
-                if let Some(conn) = self.conn_hm.get(&task.database) {
-                    task.result = conn.alter_data(&task.sql_str);
-                    self.sender(TaskEnum::AlterTask(task));
+            Ok(SqlTaskEnum::AlterTask(mut sql_task)) => {
+                if let Some(conn) = self.conn_hm.get(&sql_task.database) {
+                    sql_task.result = conn.alter_data(&sql_task.sql_str);
+                    self.sender(SqlTaskEnum::AlterTask(sql_task));
                 } else {
-                    task.result = Err("database not exist".into());
-                    self.sender(TaskEnum::AlterTask(task));
+                    sql_task.result = Err("database not exist".into());
+                    self.sender(SqlTaskEnum::AlterTask(sql_task));
                 }
                 return RecvRes::TaskData;
             }
@@ -111,7 +111,7 @@ impl Execute {
         }
     }
 
-    fn sender(&self, task_enum: TaskEnum) {
+    fn sender(&self, task_enum: SqlTaskEnum) {
         let mut new_msg = task_enum;
         loop {
             match self.sender.try_send(new_msg) {

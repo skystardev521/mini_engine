@@ -1,6 +1,6 @@
 use crate::config::ConnConfig;
-use crate::result::MysqlResult;
-use crate::result::QueryResult;
+use crate::query_result::MysqlResult;
+use crate::query_result::QueryResult;
 use mysqlclient_sys as ffi;
 use std::ffi::CStr;
 use std::os::raw;

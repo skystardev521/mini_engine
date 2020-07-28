@@ -1,17 +1,18 @@
-use crate::config::WorkerConfig;
 use mini_socket::message::NetMsg;
 use mini_socket::message::ProtoId;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
+use mini_utils::worker_config::WorkerConfig;
 
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::TrySendError;
 
-use crate::worker::Worker;
-
-use log::error;
+use log::{error, warn};
+use mini_utils::worker::RecvResEnum;
+use mini_utils::worker::SendResEnum;
+use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
 pub struct WanService {
@@ -42,19 +43,34 @@ impl WanService {
         let mut num = 0;
         loop {
             match self.worker.receiver() {
-                None => break,
-                Some(msg) => {
+                RecvResEnum::Empty => break,
+                RecvResEnum::Data(task) => {
                     num += 1;
                     if num == self.single_max_task_num {
                         break;
                     }
+                }
+                RecvResEnum::Disconnected => {
+                    error!("Worker:{} Disconnected", self.worker.get_name());
                 }
             }
         }
     }
     #[inline]
     pub fn sender(&mut self, msg: NetMsg) -> bool {
-        self.worker.sender(msg)
+        match self.worker.sender(msg) {
+            SendResEnum::Success => {
+                return true;
+            }
+            SendResEnum::Full(_) => {
+                warn!("Worker:{} Full", self.worker.get_name());
+                return false;
+            }
+            SendResEnum::Disconnected(_) => {
+                error!("Worker:{} Disconnected", self.worker.get_name());
+                return false;
+            }
+        }
     }
 }
 

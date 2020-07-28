@@ -1,4 +1,4 @@
-use crate::task::TaskEnum;
+use crate::sql_task::SqlTaskEnum;
 use log::{error, warn};
 use mini_utils::worker::RecvResEnum;
 use mini_utils::worker::SendResEnum;
@@ -7,7 +7,7 @@ use mini_utils::worker::Worker;
 pub struct Workers {
     poll_idx: usize,
     single_max_task_num: usize,
-    vec_worker: Vec<Worker<TaskEnum, ()>>,
+    vec_worker: Vec<Worker<SqlTaskEnum, ()>>,
 }
 
 impl Drop for Workers {
@@ -31,11 +31,11 @@ impl Workers {
     }
 
     #[inline]
-    pub fn push(&mut self, worker: Worker<TaskEnum, ()>) {
+    pub fn push(&mut self, worker: Worker<SqlTaskEnum, ()>) {
         self.vec_worker.push(worker);
     }
 
-    pub fn sender(&mut self, task_enum: TaskEnum) -> bool {
+    pub fn sender(&mut self, task_enum: SqlTaskEnum) -> bool {
         if self.vec_worker.is_empty() {
             return false;
         }
@@ -98,18 +98,18 @@ impl Workers {
         }
     }
 
-    fn loop_recv(&self, worker: &Worker<TaskEnum, ()>) -> Result<(), String> {
+    fn loop_recv(&self, worker: &Worker<SqlTaskEnum, ()>) -> Result<(), String> {
         let mut idx = 0;
         loop {
             match worker.receiver() {
                 RecvResEnum::Empty => {
                     return Ok(());
                 }
-                RecvResEnum::Data(TaskEnum::QueryTask(mut task)) => {
-                    (task.callback)(task.result);
+                RecvResEnum::Data(SqlTaskEnum::QueryTask(mut sql_task)) => {
+                    (sql_task.callback)(sql_task.result);
                 }
-                RecvResEnum::Data(TaskEnum::AlterTask(mut task)) => {
-                    (task.callback)(task.result);
+                RecvResEnum::Data(SqlTaskEnum::AlterTask(mut sql_task)) => {
+                    (sql_task.callback)(sql_task.result);
                 }
                 RecvResEnum::Disconnected => {
                     return Err(format!("Worker:{} Disconnected", worker.get_name()));

@@ -1,11 +1,11 @@
-use crate::result::MysqlResult;
-use crate::result::QueryResult;
-pub enum TaskEnum {
-    AlterTask(Task<u64>),
-    QueryTask(Task<QueryResult<MysqlResult>>),
+use crate::query_result::MysqlResult;
+use crate::query_result::QueryResult;
+pub enum SqlTaskEnum {
+    AlterTask(SqlTask<u64>),
+    QueryTask(SqlTask<QueryResult<MysqlResult>>),
 }
 
-pub struct Task<RT> {
+pub struct SqlTask<RT> {
     /// 数据库Id
     pub sql_str: String,
     /// database_host_port
@@ -14,7 +14,7 @@ pub struct Task<RT> {
     pub callback: Box<dyn FnMut(Result<RT, String>) + Send>,
 }
 
-impl<RT> Task<RT> {
+impl<RT> SqlTask<RT> {
     pub fn new(
         sql_str: String,
         database: String,
@@ -23,7 +23,7 @@ impl<RT> Task<RT> {
     where
         RT: Send + 'static,
     {
-        return Task {
+        return SqlTask {
             sql_str,
             database,
             callback,

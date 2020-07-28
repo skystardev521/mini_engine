@@ -15,12 +15,10 @@ use std::time::Duration;
 use mini_utils::logger::Logger;
 
 use crate::wan_service::WanService;
-use config::ProxyConfig;
-use config::WorkerConfig;
+use config::Config;
 
 mod config;
 mod wan_service;
-mod worker;
 
 use mini_utils::time;
 
@@ -42,8 +40,8 @@ fn main() {
         }
     }
 
-    let config: ProxyConfig;
-    match read_proxy_config("config.txt".into()) {
+    let config: Config;
+    match read_config("config.txt".into()) {
         Ok(cfg) => config = cfg,
         Err(err) => {
             error!("Config error:{}", err);
@@ -86,8 +84,8 @@ fn read_tcp_server_config(_path: String) -> Result<TcpListenConfig, String> {
     Ok(TcpListenConfig::new())
 }
 
-fn read_proxy_config(_path: String) -> Result<ProxyConfig, String> {
-    Ok(ProxyConfig::new(String::from("proxy"), WorkerConfig::new()))
+fn read_config(_path: String) -> Result<Config, String> {
+    Ok(Config::new())
 }
 
 /*

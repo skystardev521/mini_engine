@@ -1,5 +1,4 @@
 use crate::config::Config;
-
 use mini_utils::time;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
@@ -7,11 +6,14 @@ use std::thread;
 
 use crate::execute::Execute;
 use crate::execute::RecvRes;
-use crate::task::TaskEnum;
+use crate::sql_task::SqlTaskEnum;
 use crate::workers::Workers;
 use mini_utils::worker::Worker;
 
 use log::error;
+
+/// ping mysql connect 60 sec
+const PING_INTERVAL: u64 = 60 * 1000;
 
 pub struct Service {
     workers: Workers,
@@ -20,8 +22,8 @@ pub struct Service {
 /// 发送Task接收Task结果
 impl Service {
     pub fn new(config: Config) -> Result<Self, String> {
-        let worker_num = config.workers_config.get_worker_num();
-        let single_max_task_num = config.workers_config.get_single_max_task_num();
+        let worker_num = config.get_worker_num();
+        let single_max_task_num = config.worker_config.get_single_max_task_num();
         let mut service = Service {
             workers: Workers::new(worker_num, single_max_task_num),
         };
@@ -30,13 +32,12 @@ impl Service {
     }
 
     fn init(&mut self, config: Config) -> Result<(), String> {
-        let worker_num = config.workers_config.get_worker_num();
-        for i in 0..worker_num {
+        for i in 0..config.get_worker_num() {
             let name = format!("mysqlclient_{}", i);
             match Worker::new(
                 name.clone(),
-                config.workers_config.get_stack_size(),
-                config.workers_config.get_channel_size(),
+                config.worker_config.get_stack_size(),
+                config.worker_config.get_channel_size(),
                 worker_closure(name.clone(), config.clone()),
             ) {
                 Ok(worker) => {
@@ -55,7 +56,7 @@ impl Service {
         self.workers.receiver();
     }
 
-    pub fn sender(&mut self, task_enum: TaskEnum) -> bool {
+    pub fn sender(&mut self, task_enum: SqlTaskEnum) -> bool {
         self.workers.sender(task_enum)
     }
 }
@@ -63,12 +64,12 @@ impl Service {
 fn worker_closure(
     name: String,
     config: Config,
-) -> Box<dyn FnOnce(Receiver<TaskEnum>, SyncSender<TaskEnum>) + Send> {
+) -> Box<dyn FnOnce(Receiver<SqlTaskEnum>, SyncSender<SqlTaskEnum>) + Send> {
     Box::new(
-        move |receiver: Receiver<TaskEnum>, sender: SyncSender<TaskEnum>| {
+        move |receiver: Receiver<SqlTaskEnum>, sender: SyncSender<SqlTaskEnum>| {
             let mut execute = Execute::new(
                 name,
-                config.workers_config.get_sleep_duration(),
+                config.worker_config.get_sleep_duration(),
                 receiver,
                 sender,
             );
@@ -76,16 +77,15 @@ fn worker_closure(
             execute.connect(config.vec_connect_config);
 
             let mut last_ping_timestamp = time::timestamp();
-            let ping_interval = config.workers_config.get_ping_interval().as_secs();
 
             loop {
                 match execute.receiver() {
                     RecvRes::Empty => {
-                        if last_ping_timestamp + ping_interval < time::timestamp() {
+                        if last_ping_timestamp + PING_INTERVAL < time::timestamp() {
                             execute.ping_connect();
                             last_ping_timestamp = time::timestamp();
                         }
-                        thread::sleep(config.workers_config.get_sleep_duration());
+                        thread::sleep(config.worker_config.get_sleep_duration());
                     }
                     RecvRes::TaskData => {
                         continue;
@@ -101,22 +101,22 @@ fn worker_closure(
 #[macro_use]
 //mod result;
 
-use crate::result::QueryResult;
-use crate::result::MysqlResult;
-use crate::result::CellValue;
-use crate::task::Task;
+use crate::query_result::QueryResult;
+use crate::query_result::MysqlResult;
+use crate::query_result::CellValue;
+use crate::sql_task::SqlTask;
 
-use crate::task::TaskEnum;
+use crate::sql_task::SqlTaskEnum;
 use crate::service::Service;
 use crate::config::ConnConfig;
 use crate::config::ThreadConfig;
 
 
 pub fn test() {
-    let mut workers_config = ThreadConfig::new();
+    let mut worker_config = ThreadConfig::new();
     let mut vec_conn_config: Vec<ConnConfig> = Vec::new();
 
-    workers_config.set_sleep_duration(1000).set_worker_num(5);
+    worker_config.set_sleep_duration(1000).set_worker_num(5);
 
     for i in 0..10 {
         let mut config = ConnConfig::new();
@@ -127,7 +127,7 @@ pub fn test() {
         vec_conn_config.push(config);
     }
 
-    let mut service = Service::new(workers_config, vec_conn_config);
+    let mut service = Service::new(worker_config, vec_conn_config);
     service.init();
 
     let database = format!("{}_{}_{}", "dev_db", "127.0.0.1", 3306);
@@ -136,7 +136,7 @@ pub fn test() {
             "insert into test (id,name,text)values({},'name{}','text{}');",
             i, i, i
         );
-        let alter_task: Task<u64> = Task::new(
+        let alter_task: SqlTask<u64> = SqlTask::new(
             sql_str,
             database.clone(),
             Box::new(|result: Result<u64, String>| match result {
@@ -149,14 +149,14 @@ pub fn test() {
             }),
         );
 
-        service.sender(TaskEnum::AlterTask(alter_task));
+        service.sender(SqlTaskEnum::AlterTask(alter_task));
     }
 
     for _ in 1..500 {
         let sql_str = "SELECT * FROM dev_db.test LIMIT 10;".into();
         let database = format!("{}_{}_{}", "dev_db", "127.0.0.1", 3306);
 
-        let query_task: Task<QueryResult<MysqlResult>> = Task::new(
+        let query_task: SqlTask<QueryResult<MysqlResult>> = SqlTask::new(
             sql_str,
             database,
             Box::new(
@@ -177,7 +177,7 @@ pub fn test() {
             ),
         );
 
-        service.sender(TaskEnum::QueryTask(query_task));
+        service.sender(SqlTaskEnum::QueryTask(query_task));
     }
 
     loop {

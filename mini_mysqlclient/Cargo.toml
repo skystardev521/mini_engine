@@ -8,5 +8,6 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.0"
-mysqlclient-sys = "0.2.4"
+#mysqlclient-sys = "0.2.4"
 mini_utils = { version = "0.1.0", path = "../mini_utils"}
+mysqlclient-sys = { version = "0.2.4", path = "../mysqlclient-sys"}

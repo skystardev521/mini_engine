@@ -1,8 +1,8 @@
+/*
 use log::error;
 use mini_socket::message::NetMsg;
 use mini_socket::message::ProtoId;
 use mini_socket::tcp_connect_config::TcpConnectConfig;
-use mini_socket::tcp_connect_config::TcpConnectConfigBuilder;
 use mini_socket::tcp_connect_service::TcpConnectService;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -10,16 +10,20 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::TrySendError;
-use std::thread;
-use std::time::Duration;
 
-use mini_utils::logger::Logger;
+
+
+
 
 use mini_service::Config;
 use mini_service::ConfigBuilder;
 use mini_service::Service;
 
+*/
+use mini_utils::logger::Logger;
 use mini_utils::time;
+use std::thread;
+use std::time::Duration;
 
 const LOG_FILE_DURATION: u64 = 60 * 60 * 1000;
 
@@ -33,6 +37,7 @@ fn main() {
         Err(err) => println!("Logger::init error:{}", err),
     }
 
+    /*
     let tcp_connect_confg: TcpConnectConfig;
     match read_tcp_connect_confg("tcp_connect_confg.txt".into()) {
         Ok(config) => tcp_connect_confg = config,
@@ -69,6 +74,7 @@ fn main() {
     let _server_thread = server_builder.spawn(move || {
         server_thread_run(&config, server_receiver, server_sync_sender);
     });
+    */
 
     loop {
         thread::sleep(Duration::from_secs(60));
@@ -80,16 +86,15 @@ fn main() {
     }
 }
 
+/*
 fn read_tcp_connect_confg(_path: String) -> Result<TcpConnectConfig, String> {
-    let mut config_builder = TcpConnectConfigBuilder::new();
-    let config = config_builder
-        .set_vec_socket_addr(&vec!["0.0.0.0:9999".into()])
-        .builder();
-    Ok(config)
+    let mut tcp_connect_config = TcpConnectConfig::new();
+    tcp_connect_config.set_vec_socket_addr(&vec!["0.0.0.0:9999".into()]);
+    Ok(tcp_connect_config)
 }
 
 fn read_server_config(_path: String) -> Result<Config, String> {
-    let config_builder = ConfigBuilder::new();
+    let config_builder = Config::new();
     let config = config_builder.builder();
     Ok(config)
 }
@@ -204,3 +209,4 @@ fn server_thread_run(config: &Config, receiver: Receiver<NetMsg>, sync_sender: S
         }
     }
 }
+*/

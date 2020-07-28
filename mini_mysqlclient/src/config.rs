@@ -1,107 +1,28 @@
+use mini_utils::worker_config::WorkerConfig;
 use std::ffi::{CStr, CString};
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct Config {
-    pub workers_config: WorkersConfig,
+    pub worker_num: u8,
+    pub worker_config: WorkerConfig,
     pub vec_connect_config: Vec<ConnConfig>,
 }
 
 impl Config {
-    pub fn new(workers_config: WorkersConfig, vec_connect_config: Vec<ConnConfig>) -> Self {
+    pub fn new(
+        worker_num: u8,
+        worker_config: WorkerConfig,
+        vec_connect_config: Vec<ConnConfig>,
+    ) -> Self {
         Config {
-            workers_config,
+            worker_num,
+            worker_config,
             vec_connect_config,
         }
     }
-}
 
-#[derive(Clone)]
-pub struct WorkersConfig {
-    name: String,
-    worker_num: u8,
-    stack_size: usize,
-    channel_size: u16,
-    ping_interval: Duration,
-    sleep_duration: Duration,
-    single_max_task_num: u16,
-}
-
-impl WorkersConfig {
-    pub fn new() -> Self {
-        WorkersConfig {
-            worker_num: 2,
-            stack_size: 0,
-            channel_size: 1024,
-            single_max_task_num: 1024,
-            name: String::from("mysql"),
-            ping_interval: Duration::from_secs(300),
-            sleep_duration: Duration::from_millis(1),
-        }
-    }
-
-    /// 设置worker数量
     pub fn get_worker_num(&self) -> u8 {
         self.worker_num
-    }
-    /// 线程的栈大小 0:使用系统默认大小
-    pub fn get_stack_size(&self) -> usize {
-        self.stack_size
-    }
-    /// 每个worker间通信任务队列数量
-    pub fn get_channel_size(&self) -> u16 {
-        self.channel_size
-    }
-    /// 每个worker单次处理最大任务数量
-    pub fn get_single_max_task_num(&self) -> u16 {
-        self.single_max_task_num
-    }
-    /// ping mysql connect 间隔 单位sec
-    pub fn get_ping_interval(&self) -> Duration {
-        self.ping_interval
-    }
-
-    /// 空闲时worker休眠时长
-    pub fn get_sleep_duration(&self) -> Duration {
-        self.sleep_duration
-    }
-
-    /// 设置worker数量
-    pub fn set_worker_num(&mut self, num: u8) -> &mut Self {
-        self.worker_num = if num == 0 { 1 } else { num };
-        self
-    }
-
-    /// 线程的栈大小 0:使用系统默认大小
-    pub fn set_stack_size(&mut self, num: usize) -> &mut Self {
-        self.stack_size = num;
-        self
-    }
-
-    /// 每个worker间通信任务队列数量
-    pub fn set_channel_size(&mut self, num: u16) -> &mut Self {
-        self.channel_size = if num < 128 { 128 } else { num };
-        self
-    }
-
-    /// 每个worker单次处理最大任务数量
-    pub fn set_single_max_task_num(&mut self, num: u16) -> &mut Self {
-        self.single_max_task_num = if num < 128 { 128 } else { num };
-        self
-    }
-
-    /// ping mysql connect 间隔 单位sec
-    pub fn set_ping_interval(&mut self, num: u16) -> &mut Self {
-        let n = if num == 0 { 1 } else { num } as u64;
-        self.ping_interval = Duration::from_secs(n);
-        self
-    }
-
-    /// 空闲时worker休眠时长
-    pub fn set_sleep_duration(&mut self, num: u16) -> &mut Self {
-        let n = if num == 0 { 1 } else { num } as u64;
-        self.sleep_duration = Duration::from_millis(n);
-        self
     }
 }
 
@@ -151,6 +72,7 @@ impl ConnConfig {
         self.unix_socket.as_ref().map(|x| &**x)
     }
 
+    #[allow(dead_code)]
     pub fn set_port(&mut self, port: u16) -> &mut Self {
         self.port = port;
         return self;
