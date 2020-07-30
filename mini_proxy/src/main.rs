@@ -1,53 +1,48 @@
 use log::error;
-use mini_socket::message::NetMsg;
-use mini_socket::message::ProtoId;
-use mini_socket::tcp_listen_config::TcpListenConfig;
-use mini_socket::tcp_listen_service::TcpListenService;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::RecvTimeoutError;
-use std::sync::mpsc::SyncSender;
-use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::TrySendError;
-use std::thread;
-use std::time::Duration;
 
-use mini_utils::logger::Logger;
-
-use crate::wan_service::WanService;
+use crate::route_service::RouteService;
 use config::Config;
-
+use mini_utils::logger::Logger;
+use std::thread::{self, Builder, Thread};
+use std::time::Duration;
 mod config;
+mod lan_service;
+mod route_service;
 mod wan_service;
-
 use mini_utils::time;
 
 const LOG_FILE_DURATION: u64 = 60 * 60 * 1000;
 
 fn main() {
-    let mut open_log_file_ts = time::timestamp();
+    let mut config = Config::new();
+
+    if let Err(err) = config.read_config(&"confg.txt".into()) {
+        println!("config.read_config error:{}", err);
+        return;
+    }
+
+    config
+        .wan_listen_config
+        .set_bind_socket_addr(&"0.0.0.0:9999".into());
+    config
+        .lan_listen_config
+        .set_bind_socket_addr(&"0.0.0.0:6666".into());
+
+    let mut open_log_timestamp = time::timestamp();
     match Logger::init(&String::from("info"), &String::from("logs/mini_proxy.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),
     }
 
-    let tcp_server_confg: TcpListenConfig;
-    match read_tcp_server_config("tcp_server_confg.txt".into()) {
-        Ok(config) => tcp_server_confg = config,
-        Err(err) => {
-            error!("read_tcp_server_config error:{}", err);
-            return;
-        }
-    }
-
-    let config: Config;
-    match read_config("config.txt".into()) {
-        Ok(cfg) => config = cfg,
-        Err(err) => {
-            error!("Config error:{}", err);
-            return;
-        }
-    }
+    let route_builder = Builder::new().name("route".into());
+    let _route_thread = route_builder.spawn(move || {
+        match RouteService::new(&config) {
+            Ok(mut route_service) => {
+                route_service.run();
+            }
+            Err(err) => error!("RouteService::new Error:{}", err),
+        };
+    });
 
     /*
     let channel_size = 10000;
@@ -72,20 +67,11 @@ fn main() {
     */
     loop {
         thread::sleep(Duration::from_secs(60));
-
-        if open_log_file_ts + LOG_FILE_DURATION < time::timestamp() {
+        if open_log_timestamp + LOG_FILE_DURATION < time::timestamp() {
             log::logger().flush();
-            open_log_file_ts = time::timestamp();
+            open_log_timestamp = time::timestamp();
         }
     }
-}
-
-fn read_tcp_server_config(_path: String) -> Result<TcpListenConfig, String> {
-    Ok(TcpListenConfig::new())
-}
-
-fn read_config(_path: String) -> Result<Config, String> {
-    Ok(Config::new())
 }
 
 /*

@@ -1,12 +1,13 @@
 use std::time::Duration;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WorkerConfig {
     name: String,
     stack_size: usize,
     channel_size: u16,
-    single_max_task_num: u16,
+    /// 毫秒
     sleep_duration: Duration,
+    single_max_task_num: u16,
 }
 
 impl WorkerConfig {
@@ -16,7 +17,7 @@ impl WorkerConfig {
             channel_size: 1024,
             single_max_task_num: 1024,
             name: String::from("WorkerConfig"),
-            sleep_duration: Duration::from_millis(1),
+            sleep_duration: Duration::from_millis(2),
         }
     }
 
@@ -33,7 +34,7 @@ impl WorkerConfig {
         self.single_max_task_num
     }
 
-    /// 空闲时worker休眠时长
+    /// 空闲时worker休眠时长(毫秒)
     pub fn get_sleep_duration(&self) -> Duration {
         self.sleep_duration
     }
@@ -56,7 +57,7 @@ impl WorkerConfig {
         self
     }
 
-    /// 空闲时worker休眠时长
+    /// 空闲时worker休眠时长(毫秒)
     pub fn set_sleep_duration(&mut self, num: u16) -> &mut Self {
         let n = if num == 0 { 1 } else { num } as u64;
         self.sleep_duration = Duration::from_millis(n);

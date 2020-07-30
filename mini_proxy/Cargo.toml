@@ -8,5 +8,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.8"
+serde_json = "1.0.57"
+serde = { version = "1.0.114", features = ["derive"] }
 mini_utils = { version = "0.1.0", path = "../mini_utils"}
 mini_socket = { version = "0.1.0", path = "../mini_socket"}

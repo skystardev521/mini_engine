@@ -67,17 +67,12 @@ fn worker_closure(
 ) -> Box<dyn FnOnce(Receiver<SqlTaskEnum>, SyncSender<SqlTaskEnum>) + Send> {
     Box::new(
         move |receiver: Receiver<SqlTaskEnum>, sender: SyncSender<SqlTaskEnum>| {
-            let mut execute = Execute::new(
-                name,
-                config.worker_config.get_sleep_duration(),
-                receiver,
-                sender,
-            );
-
+            let sleep_duration = config.worker_config.get_sleep_duration();
+            let mut execute = Execute::new(name, sleep_duration, receiver, sender);
             execute.connect(config.vec_connect_config);
 
             let mut last_ping_timestamp = time::timestamp();
-
+            let sleep_duration = config.worker_config.get_sleep_duration();
             loop {
                 match execute.receiver() {
                     RecvRes::Empty => {
@@ -85,7 +80,7 @@ fn worker_closure(
                             execute.ping_connect();
                             last_ping_timestamp = time::timestamp();
                         }
-                        thread::sleep(config.worker_config.get_sleep_duration());
+                        thread::sleep(sleep_duration);
                     }
                     RecvRes::TaskData => {
                         continue;

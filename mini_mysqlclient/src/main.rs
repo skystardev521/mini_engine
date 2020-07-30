@@ -35,7 +35,7 @@ pub fn test() {
     let mut workers_config = WorkerConfig::new();
     let mut vec_conn_config: Vec<ConnConfig> = Vec::new();
 
-    workers_config.set_sleep_duration(1);
+    workers_config.set_sleep_duration(3);
 
     for _i in 0..10 {
         let mut config = ConnConfig::new();

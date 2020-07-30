@@ -1,7 +1,7 @@
 use mini_socket::message::NetMsg;
 use mini_socket::message::ProtoId;
-use mini_socket::tcp_listen_config::TcpListenConfig;
-use mini_socket::tcp_listen_service::TcpListenService;
+use mini_socket::tcp_connect_config::TcpConnectConfig;
+use mini_socket::tcp_connect_service::TcpConnectService;
 use mini_utils::worker_config::WorkerConfig;
 
 use std::sync::mpsc::Receiver;
@@ -15,23 +15,24 @@ use mini_utils::worker::SendResEnum;
 use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
-pub struct WanService {
+pub struct ConnService {
     worker: Worker<NetMsg, ()>,
 }
 
-impl WanService {
+impl ConnService {
     pub fn new(
         workers_config: &WorkerConfig,
-        tcp_listen_config: TcpListenConfig,
+        vec_tcp_connect_config: Vec<TcpConnectConfig>,
     ) -> Result<Self, String> {
+        let max_task_num = workers_config.get_single_max_task_num();
         let worker = Worker::new(
-            String::from("WanWorker"),
+            String::from("ConnService"),
             workers_config.get_stack_size(),
             workers_config.get_channel_size(),
-            worker_closure(tcp_listen_config),
+            worker_closure(max_task_num, vec_tcp_connect_config),
         )?;
 
-        Ok(WanService { worker: worker })
+        Ok(ConnService { worker: worker })
     }
 
     #[inline]
@@ -64,7 +65,8 @@ impl WanService {
 }
 
 fn worker_closure(
-    tcp_listen_config: TcpListenConfig,
+    single_write_msg_max_num: u16,
+    vec_tcp_connect_config: Vec<TcpConnectConfig>,
 ) -> Box<dyn FnOnce(Receiver<NetMsg>, SyncSender<NetMsg>) + Send> {
     Box::new(
         move |receiver: Receiver<NetMsg>, sender: SyncSender<NetMsg>| {
@@ -73,21 +75,21 @@ fn worker_closure(
                 match sender.try_send(net_msg) {
                     Ok(()) => return Ok(()),
                     Err(TrySendError::Full(_)) => {
-                        error!("net_thread try_send Full");
+                        error!("TcpConnectService try_send Full");
                         return Err(ProtoId::BusyServer);
                     }
                     Err(TrySendError::Disconnected(_)) => {
-                        error!("net_thread try_send Disconnected");
+                        error!("TcpConnectService try_send Disconnected");
                         return Err(ProtoId::ExceptionServer);
                     }
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_listen_service: TcpListenService;
-            match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb) {
-                Ok(service) => tcp_listen_service = service,
+            let mut tcp_connect_service: TcpConnectService;
+            match TcpConnectService::new(vec_tcp_connect_config, &mut net_msg_cb) {
+                Ok(service) => tcp_connect_service = service,
                 Err(err) => {
-                    error!("TcpListenService::new error:{}", err);
+                    error!("TcpConnectService::new error:{}", err);
                     return;
                 }
             }
@@ -95,17 +97,17 @@ fn worker_closure(
             let mut epoll_wait_timeout = 0;
             let mut single_write_msg_count;
             loop {
-                tcp_listen_service.tick();
+                tcp_connect_service.tick();
 
-                match tcp_listen_service.epoll_event(epoll_wait_timeout) {
+                match tcp_connect_service.epoll_event(epoll_wait_timeout) {
                     Ok(0) => epoll_wait_timeout = 1,
-                    Ok(num) => {
-                        if num == tcp_listen_config.epoll_max_events {
+                    Ok(epevs) => {
+                        if epevs == tcp_connect_service.get_epoll_max_events() {
                             epoll_wait_timeout = 0;
                         }
                     }
                     Err(err) => {
-                        error!("TcpListenService epoll_event:{}", err);
+                        error!("TcpConnectService epoll_event:{}", err);
                         break;
                     }
                 }
@@ -114,12 +116,9 @@ fn worker_closure(
                 loop {
                     match receiver.try_recv() {
                         Ok(net_msg) => {
-                            //这里要优化 判断是否广播消息
-                            tcp_listen_service.write_net_msg(net_msg);
-
+                            tcp_connect_service.write_net_msg(net_msg);
                             single_write_msg_count += 1;
-                            if single_write_msg_count == tcp_listen_config.single_write_msg_max_num
-                            {
+                            if single_write_msg_count == single_write_msg_max_num {
                                 epoll_wait_timeout = 0;
                                 break;
                             }

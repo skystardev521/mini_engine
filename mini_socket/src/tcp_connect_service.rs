@@ -5,7 +5,6 @@ use crate::os_epoll::OSEpoll;
 use crate::os_socket;
 use crate::tcp_connect::TcpConnect;
 use crate::tcp_connect_config::TcpConnectConfig;
-use crate::tcp_connect_mgmt::TcpConnectMgmt;
 use crate::tcp_socket_reader::ReadResult;
 use crate::tcp_socket_writer::WriteResult;
 use libc;
@@ -26,8 +25,8 @@ const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
 pub struct TcpConnectService<'a> {
     os_epoll: OSEpoll,
-    config: &'a TcpConnectConfig,
-    tcp_connect_mgmt: TcpConnectMgmt<'a>,
+    epoll_max_events: u16,
+    vec_tcp_connect: Vec<TcpConnect>,
     vec_epoll_event: Vec<libc::epoll_event>,
     net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
@@ -44,33 +43,43 @@ impl<'a> Drop for TcpConnectService<'a> {
 
 impl<'a> TcpConnectService<'a> {
     pub fn new(
-        config: &'a TcpConnectConfig,
+        vec_tcp_connect_config: Vec<TcpConnectConfig>,
         net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
-
-        let tcp_connect_mgmt = TcpConnectMgmt::new(config)?;
-
+        let tcp_connect_num = vec_tcp_connect_config.len();
         Ok(TcpConnectService {
             os_epoll,
-            config,
             net_msg_cb,
-            tcp_connect_mgmt,
-            vec_epoll_event: vec![
-                libc::epoll_event { events: 0, u64: 0 };
-                config.epoll_max_events as usize
-            ],
+            epoll_max_events: tcp_connect_num as u16,
+            vec_tcp_connect: init_tcp_connect(vec_tcp_connect_config),
+            vec_epoll_event: vec![libc::epoll_event { events: 0, u64: 0 }; tcp_connect_num],
         })
     }
+
     pub fn tick(&mut self) {}
+
+    pub fn get_conn_info(&self) -> Vec<(u16, String)> {
+        let len = self.vec_tcp_connect.len();
+        let mut vec_info = Vec::with_capacity(len);
+        for i in 0..len {
+            vec_info.push((i as u16, self.vec_tcp_connect[i].get_config().name.clone()));
+        }
+        vec_info
+    }
+
+    pub fn get_epoll_max_events(&self) -> u16 {
+        self.epoll_max_events
+    }
+
     pub fn epoll_event(&mut self, epoll_wait_timeout: i32) -> Result<u16, String> {
         match self
             .os_epoll
             .wait(epoll_wait_timeout, &mut self.vec_epoll_event)
         {
             Ok(0) => return Ok(0),
-            Ok(num) => {
-                for n in 0..num as usize {
+            Ok(epevs) => {
+                for n in 0..epevs as usize {
                     let event = self.vec_epoll_event[n];
                     if (event.events & libc::EPOLLIN as u32) != 0 {
                         self.read_event(event.u64);
@@ -82,7 +91,7 @@ impl<'a> TcpConnectService<'a> {
                         self.error_event(event.u64, Error::last_os_error().to_string());
                     }
                 }
-                return Ok(num as u16);
+                return Ok(epevs as u16);
             }
             Err(err) => return Err(err),
         }
@@ -90,7 +99,7 @@ impl<'a> TcpConnectService<'a> {
 
     fn read_event(&mut self, sid: u64) {
         //info!("read id:{}", id);
-        if let Some(tcp_connect) = self.tcp_connect_mgmt.get_tcp_connect(sid) {
+        if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(sid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 let mut msg_cb_err_reason = None;
                 loop {
@@ -139,12 +148,12 @@ impl<'a> TcpConnectService<'a> {
 
     #[inline]
     pub fn write_net_msg(&mut self, net_msg: NetMsg) {
-        match self.tcp_connect_mgmt.get_tcp_connect(net_msg.sid) {
+        match self.vec_tcp_connect.get_mut(net_msg.sid as usize) {
             Some(tcp_connect) => {
+                let max_num = tcp_connect.get_config().wait_write_msg_max_num;
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
-                    if tcp_socket.writer.get_msg_data_count() > self.config.wait_write_msg_max_num {
+                    if tcp_socket.writer.get_msg_data_count() > max_num {
                         // 发送服务繁忙消息
-
                         warn!("net_msg.id:{} Too much msg_data not send", net_msg.sid);
                         self.send_simple_net_msg(net_msg.sid, ProtoId::BusyServer);
                         return;
@@ -165,7 +174,7 @@ impl<'a> TcpConnectService<'a> {
                                 tcp_socket.socket.as_raw_fd(),
                             );
 
-                            match reconnect_tcp_connect(self.config, &tcp_connect) {
+                            match tcp_reconnect(&tcp_connect) {
                                 Ok(None) => (),
                                 Ok(Some(new_tcp_socket)) => {
                                     tcp_connect.set_tcp_socket_opt(Some(new_tcp_socket));
@@ -173,8 +182,8 @@ impl<'a> TcpConnectService<'a> {
                                 Err(err) => {
                                     tcp_connect.set_tcp_socket_opt(None);
                                     error!(
-                                        "reconnect_tcp_connect {} error:{}",
-                                        tcp_connect.get_socket_addr(),
+                                        "tcp_reconnect {} error:{}",
+                                        tcp_connect.get_config().socket_addr,
                                         err
                                     )
                                 }
@@ -192,13 +201,13 @@ impl<'a> TcpConnectService<'a> {
     }
 
     fn write_event(&mut self, sid: u64) {
-        if let Some(tcp_connect) = self.tcp_connect_mgmt.get_tcp_connect(sid) {
+        if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(sid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 if let Err(err) = write_data(&self.os_epoll, sid, tcp_socket) {
                     warn!("tcp_socket.writer.write sid:{} err:{}", sid, err);
                     epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
 
-                    match reconnect_tcp_connect(self.config, &tcp_connect) {
+                    match tcp_reconnect(&tcp_connect) {
                         Ok(None) => (),
                         Ok(Some(new_tcp_socket)) => {
                             tcp_connect.set_tcp_socket_opt(Some(new_tcp_socket));
@@ -206,8 +215,8 @@ impl<'a> TcpConnectService<'a> {
                         Err(err) => {
                             tcp_connect.set_tcp_socket_opt(None);
                             error!(
-                                "reconnect_tcp_connect {} error:{}",
-                                tcp_connect.get_socket_addr(),
+                                "tcp_reconnect {} error:{}",
+                                tcp_connect.get_config().socket_addr,
                                 err
                             )
                         }
@@ -221,12 +230,12 @@ impl<'a> TcpConnectService<'a> {
 
     fn error_event(&mut self, sid: u64, err: String) {
         warn!("os_epoll error event:{}", err);
-        if let Some(tcp_connect) = self.tcp_connect_mgmt.get_tcp_connect(sid) {
+        if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(sid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
             }
 
-            match reconnect_tcp_connect(self.config, &tcp_connect) {
+            match tcp_reconnect(&tcp_connect) {
                 Ok(None) => (),
                 Ok(Some(new_tcp_socket)) => {
                     tcp_connect.set_tcp_socket_opt(Some(new_tcp_socket));
@@ -234,8 +243,8 @@ impl<'a> TcpConnectService<'a> {
                 Err(err) => {
                     tcp_connect.set_tcp_socket_opt(None);
                     error!(
-                        "reconnect_tcp_connect {} error:{}",
-                        tcp_connect.get_socket_addr(),
+                        "tcp_reconnect {} error:{}",
+                        tcp_connect.get_config().socket_addr,
                         err
                     )
                 }
@@ -258,6 +267,22 @@ impl<'a> TcpConnectService<'a> {
             }
         }
     }
+}
+
+fn init_tcp_connect(vec_tcp_connect_config: Vec<TcpConnectConfig>) -> Vec<TcpConnect> {
+    let mut id = 0;
+    let connect_num = vec_tcp_connect_config.len();
+    let mut vec_tcp_connect = Vec::with_capacity(connect_num);
+    for connect_config in vec_tcp_connect_config {
+        match new_tcp_socket(&connect_config) {
+            Ok(tcp_socket) => {
+                vec_tcp_connect.push(TcpConnect::new(id, connect_config, Some(tcp_socket)));
+            }
+            Err(err) => error!("tcp_connect {} error:{}", connect_config.socket_addr, err),
+        }
+        id += 1;
+    }
+    vec_tcp_connect
 }
 
 fn epoll_del_fd(os_epoll: &OSEpoll, sid: u64, raw_fd: RawFd) {
@@ -286,17 +311,15 @@ fn write_data(os_epoll: &OSEpoll, sid: u64, tcp_socket: &mut TcpSocket) -> Resul
     }
 }
 
-pub fn reconnect_tcp_connect(
-    config: &TcpConnectConfig,
-    tcp_connect: &TcpConnect,
-) -> Result<Option<TcpSocket>, String> {
-    let now_timestamp = time::timestamp();
-    if tcp_connect.get_last_reconnect_timestamp() + config.reconnect_socket_interval as u64
-        > now_timestamp
+/// 断线重连
+fn tcp_reconnect(tcp_connect: &TcpConnect) -> Result<Option<TcpSocket>, String> {
+    if tcp_connect.get_last_reconnect_timestamp()
+        + tcp_connect.get_config().reconnect_interval as u64
+        > time::timestamp()
     {
         return Ok(None);
     }
-    match new_tcp_socket(tcp_connect.get_socket_addr(), config) {
+    match new_tcp_socket(tcp_connect.get_config()) {
         Ok(tcp_socket) => {
             return Ok(Some(tcp_socket));
         }
@@ -304,8 +327,9 @@ pub fn reconnect_tcp_connect(
     }
 }
 
-fn new_tcp_socket(socket_addr: &String, config: &TcpConnectConfig) -> Result<TcpSocket, String> {
-    match socket_addr.parse::<SocketAddr>() {
+/// 新建链接
+fn new_tcp_socket(config: &TcpConnectConfig) -> Result<TcpSocket, String> {
+    match config.socket_addr.parse::<SocketAddr>() {
         Ok(addr) => {
             let duration = Duration::from_millis(config.connect_timeout_duration as u64);
             match TcpStream::connect_timeout(&addr, duration) {

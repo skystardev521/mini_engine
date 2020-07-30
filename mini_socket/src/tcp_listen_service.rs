@@ -81,8 +81,8 @@ impl<'a> TcpListenService<'a> {
             .wait(epoll_wait_timeout, &mut self.vec_epoll_event)
         {
             Ok(0) => return Ok(0),
-            Ok(num) => {
-                for n in 0..num as usize {
+            Ok(epevs) => {
+                for n in 0..epevs as usize {
                     let event = self.vec_epoll_event[n];
                     if event.u64 == TCP_LISTEN_ID {
                         self.accept_event();
@@ -99,7 +99,7 @@ impl<'a> TcpListenService<'a> {
                         self.error_event(event.u64, Error::last_os_error().to_string());
                     }
                 }
-                return Ok(num as u16);
+                return Ok(epevs as u16);
             }
             Err(err) => return Err(err),
         }
