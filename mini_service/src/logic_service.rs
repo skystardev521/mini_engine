@@ -4,9 +4,11 @@ use log::error;
 use mini_socket::message::NetMsg;
 use mini_socket::message::ProtoId;
 use std::thread;
+use std::time::Duration;
 
 pub struct LogicService {
-    config: Config,
+    sleep_duration: Duration,
+    single_max_task_num: u16,
     conn_service: ConnService,
     //net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
@@ -28,34 +30,28 @@ impl LogicService {
     ) -> Result<Self, String> {
         let vec_tcp_connect_config = config.vec_tcp_connect_config.clone();
         let conn_service = ConnService::new(&config.worker_config, vec_tcp_connect_config)?;
-        Ok(LogicService {
-            config,
-            conn_service,
-        })
-        //logic_service.init(&config)
-    }
 
-    /*
-    fn init(&self, config: &Config) -> Result<Self, String> {
-        Ok(*self)
+        let sleep_duration = config.worker_config.get_sleep_duration();
+        let single_max_task_num = config.worker_config.get_single_max_task_num();
+
+        Ok(LogicService {
+            conn_service,
+            sleep_duration,
+            single_max_task_num,
+        })
     }
-    */
 
     pub fn run(&self) {
         loop {
-            let mut is_sleep = true;
             self.tick();
-
+            let mut is_sleep = true;
             if !self.net_receiver() {
                 is_sleep = false;
             }
-            /*
-            if !self.lan_receiver() {
-                is_sleep = false;
-            }
-            */
+
             if is_sleep {
-                thread::sleep(self.config.worker_config.get_sleep_duration());
+                thread::sleep(self.sleep_duration);
+                error!("sleep_duration:{}", self.sleep_duration.as_millis());
             }
         }
     }
@@ -66,15 +62,21 @@ impl LogicService {
             match self.conn_service.receiver() {
                 None => return true,
                 Some(net_msg) => {
-                    //self.sender_lan(net_msg);
+                    error!("receiver:{}", net_msg.sid);
+                    self.net_sender(net_msg);
                     num += 1;
-                    if num == self.config.worker_config.get_single_max_task_num() {
+                    if num == self.single_max_task_num {
                         return false;
                     }
                 }
             }
         }
     }
+
+    fn net_sender(&self, net_msg: NetMsg) -> bool {
+        self.conn_service.sender(net_msg)
+    }
+
     /*
     pub fn new_net_msg(&mut self, net_msg: NetMsg) {
         //info!("new_net_msg id:{}", net_msg.id);

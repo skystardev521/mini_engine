@@ -29,7 +29,7 @@ impl<MT, FT> Worker<MT, FT> {
     pub fn new(
         name: String,
         stack_size: usize,
-        channel_size: u16,
+        channel_size: u32,
         worker_run: Box<dyn FnOnce(Receiver<MT>, SyncSender<MT>) -> FT + Send>,
     ) -> Result<Self, String>
     where

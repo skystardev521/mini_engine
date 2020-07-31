@@ -73,11 +73,11 @@ fn worker_closure(
                 match sender.try_send(net_msg) {
                     Ok(()) => return Ok(()),
                     Err(TrySendError::Full(_)) => {
-                        error!("net_thread try_send Full");
+                        error!("WanService try_send Full");
                         return Err(ProtoId::BusyServer);
                     }
                     Err(TrySendError::Disconnected(_)) => {
-                        error!("net_thread try_send Disconnected");
+                        error!("WanService try_send Disconnected");
                         return Err(ProtoId::ExceptionServer);
                     }
                 };
@@ -127,7 +127,7 @@ fn worker_closure(
                         Err(TryRecvError::Empty) => break,
 
                         Err(TryRecvError::Disconnected) => {
-                            error!("net_thread receiver.try_recv:Disconnected");
+                            error!("WanService receiver.try_recv:Disconnected");
                             break;
                         }
                     }

@@ -1,4 +1,3 @@
-
 use log::error;
 use mini_service::Config;
 use mini_service::LogicService;

@@ -25,7 +25,7 @@ impl LanService {
         tcp_listen_config: TcpListenConfig,
     ) -> Result<Self, String> {
         let worker = Worker::new(
-            String::from("WanWorker"),
+            String::from("LanService"),
             workers_config.get_stack_size(),
             workers_config.get_channel_size(),
             worker_closure(tcp_listen_config),
@@ -73,11 +73,11 @@ fn worker_closure(
                 match sender.try_send(net_msg) {
                     Ok(()) => return Ok(()),
                     Err(TrySendError::Full(_)) => {
-                        error!("net_thread try_send Full");
+                        error!("LanService try_send Full");
                         return Err(ProtoId::BusyServer);
                     }
                     Err(TrySendError::Disconnected(_)) => {
-                        error!("net_thread try_send Disconnected");
+                        error!("LanService try_send Disconnected");
                         return Err(ProtoId::ExceptionServer);
                     }
                 };
@@ -127,7 +127,7 @@ fn worker_closure(
                         Err(TryRecvError::Empty) => break,
 
                         Err(TryRecvError::Disconnected) => {
-                            error!("net_thread receiver.try_recv:Disconnected");
+                            error!("LanService receiver.try_recv:Disconnected");
                             break;
                         }
                     }

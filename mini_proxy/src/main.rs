@@ -1,13 +1,13 @@
 use log::error;
 
-use crate::route_service::RouteService;
+use crate::service::Service;
 use config::Config;
 use mini_utils::logger::Logger;
-use std::thread::{self, Builder, Thread};
+use std::thread::{self, Builder};
 use std::time::Duration;
 mod config;
 mod lan_service;
-mod route_service;
+mod service;
 mod wan_service;
 use mini_utils::time;
 
@@ -21,13 +21,6 @@ fn main() {
         return;
     }
 
-    config
-        .wan_listen_config
-        .set_bind_socket_addr(&"0.0.0.0:9999".into());
-    config
-        .lan_listen_config
-        .set_bind_socket_addr(&"0.0.0.0:6666".into());
-
     let mut open_log_timestamp = time::timestamp();
     match Logger::init(&String::from("info"), &String::from("logs/mini_proxy.log")) {
         Ok(()) => (),
@@ -36,11 +29,11 @@ fn main() {
 
     let route_builder = Builder::new().name("route".into());
     let _route_thread = route_builder.spawn(move || {
-        match RouteService::new(&config) {
-            Ok(mut route_service) => {
-                route_service.run();
+        match Service::new(config) {
+            Ok(service) => {
+                service.run();
             }
-            Err(err) => error!("RouteService::new Error:{}", err),
+            Err(err) => error!("Service::new Error:{}", err),
         };
     });
 

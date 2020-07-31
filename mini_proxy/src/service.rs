@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 /// 用于把 广域网的数据 转到 局域网服务中
-pub struct RouteService {
+pub struct Service {
     //config: &'a Config,
     wan_service: WanService,
     lan_service: LanService,
@@ -17,29 +17,33 @@ pub struct RouteService {
     //net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
-impl Drop for RouteService {
+impl Drop for Service {
     fn drop(&mut self) {
         if thread::panicking() {
-            error!("dropped mini_proxy RouteService while unwinding");
+            error!("dropped mini_proxy Service while unwinding");
         } else {
-            error!("dropped mini_proxy RouteService while not unwinding");
+            error!("dropped mini_proxy Service while not unwinding");
         }
     }
 }
 
-impl RouteService {
+impl Service {
     pub fn new(
         config: Config,
         //net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
     ) -> Result<Self, String> {
         let wan_service = WanService::new(&config.worker_config, config.wan_listen_config.clone())?;
         let lan_service = LanService::new(&config.worker_config, config.lan_listen_config.clone())?;
-        Ok(RouteService {
+
+        let sleep_duration = config.worker_config.get_sleep_duration();
+        let single_max_task_num = config.worker_config.get_single_max_task_num();
+
+        Ok(Service {
             //config,
             wan_service,
             lan_service,
-            sleep_duration: config.worker_config.get_sleep_duration(),
-            single_max_task_num: config.worker_config.get_single_max_task_num(),
+            sleep_duration: sleep_duration,
+            single_max_task_num: single_max_task_num,
         })
     }
 

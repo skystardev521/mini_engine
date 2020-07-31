@@ -98,7 +98,6 @@ fn worker_closure(
             let mut single_write_msg_count;
             loop {
                 tcp_connect_service.tick();
-
                 match tcp_connect_service.epoll_event(epoll_wait_timeout) {
                     Ok(0) => epoll_wait_timeout = 1,
                     Ok(epevs) => {
@@ -126,7 +125,7 @@ fn worker_closure(
                         Err(TryRecvError::Empty) => break,
 
                         Err(TryRecvError::Disconnected) => {
-                            error!("net_thread receiver.try_recv:Disconnected");
+                            error!("ConnService receiver.try_recv:Disconnected");
                             break;
                         }
                     }

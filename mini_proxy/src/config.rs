@@ -1,4 +1,3 @@
-use mini_socket::tcp_connect_config::TcpConnectConfig;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_utils::worker_config::WorkerConfig;
 
