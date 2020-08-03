@@ -1,5 +1,4 @@
-use mini_socket::message::NetMsg;
-use mini_socket::message::ProtoId;
+use mini_socket::message::MsgEnum;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
 use mini_utils::worker_config::WorkerConfig;
@@ -16,7 +15,7 @@ use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
 pub struct LanService {
-    worker: Worker<NetMsg, ()>,
+    worker: Worker<MsgEnum, ()>,
 }
 
 impl LanService {
@@ -35,10 +34,10 @@ impl LanService {
     }
 
     #[inline]
-    pub fn receiver(&self) -> Option<NetMsg> {
+    pub fn receiver(&self) -> Option<MsgEnum> {
         match self.worker.receiver() {
             RecvResEnum::Empty => return None,
-            RecvResEnum::Data(net_msg) => return Some(net_msg),
+            RecvResEnum::Data(lan_msg) => return Some(lan_msg),
             RecvResEnum::Disconnected => {
                 error!("Worker:{} Disconnected", self.worker.get_name());
                 return None;
@@ -46,7 +45,7 @@ impl LanService {
         }
     }
     #[inline]
-    pub fn sender(&self, msg: NetMsg) -> bool {
+    pub fn sender(&self, msg: MsgEnum) -> bool {
         match self.worker.sender(msg) {
             SendResEnum::Success => {
                 return true;
@@ -65,26 +64,26 @@ impl LanService {
 
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
-) -> Box<dyn FnOnce(Receiver<NetMsg>, SyncSender<NetMsg>) + Send> {
+) -> Box<dyn FnOnce(Receiver<MsgEnum>, SyncSender<MsgEnum>) + Send> {
     Box::new(
-        move |receiver: Receiver<NetMsg>, sender: SyncSender<NetMsg>| {
+        move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb = |net_msg: NetMsg| {
-                match sender.try_send(net_msg) {
-                    Ok(()) => return Ok(()),
+            let mut msg_cb = |msg: MsgEnum| {
+                match sender.try_send(msg) {
+                    Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("LanService try_send Full");
-                        return Err(ProtoId::BusyServer);
+                        //return Err(ProtoId::BusyServer);
                     }
                     Err(TrySendError::Disconnected(_)) => {
                         error!("LanService try_send Disconnected");
-                        return Err(ProtoId::ExceptionServer);
+                        //return Err(ProtoId::ExceptionServer);
                     }
                 };
             };
             //-----------------------------------------------------------------------------
             let mut tcp_listen_service: TcpListenService;
-            match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb) {
+            match TcpListenService::new(&tcp_listen_config, &mut msg_cb) {
                 Ok(service) => tcp_listen_service = service,
                 Err(err) => {
                     error!("TcpListenService::new error:{}", err);
@@ -94,6 +93,7 @@ fn worker_closure(
             //-----------------------------------------------------------------------------
             let mut epoll_wait_timeout = 0;
             let mut single_write_msg_count;
+            let single_write_msg_max_num = tcp_listen_config.single_write_msg_max_num;
             loop {
                 tcp_listen_service.tick();
 
@@ -111,19 +111,19 @@ fn worker_closure(
                 }
                 //-----------------------------------------------------------------------------
                 single_write_msg_count = 0;
+
                 loop {
                     match receiver.try_recv() {
-                        Ok(net_msg) => {
+                        Ok(MsgEnum::NetMsg(net_msg)) => {
                             //这里要优化 判断是否广播消息
                             tcp_listen_service.write_net_msg(net_msg);
-
                             single_write_msg_count += 1;
-                            if single_write_msg_count == tcp_listen_config.single_write_msg_max_num
-                            {
+                            if single_write_msg_count == single_write_msg_max_num {
                                 epoll_wait_timeout = 0;
                                 break;
                             }
                         }
+                        Ok(MsgEnum::SysMsg(_sys_msg)) => {}
                         Err(TryRecvError::Empty) => break,
 
                         Err(TryRecvError::Disconnected) => {

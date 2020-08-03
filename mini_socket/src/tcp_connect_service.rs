@@ -1,6 +1,7 @@
-use crate::message::MsgData;
+use crate::message::MsgEnum;
 use crate::message::NetMsg;
-use crate::message::ProtoId;
+use crate::message::SysMsg;
+use crate::message::SysMsgId;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
 use crate::tcp_connect::TcpConnect;
@@ -26,9 +27,9 @@ const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 pub struct TcpConnectService<'a> {
     os_epoll: OSEpoll,
     epoll_max_events: u16,
+    msg_cb: &'a mut dyn Fn(MsgEnum),
     vec_tcp_connect: Vec<TcpConnect>,
     vec_epoll_event: Vec<libc::epoll_event>,
-    net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
 impl<'a> Drop for TcpConnectService<'a> {
@@ -44,7 +45,7 @@ impl<'a> Drop for TcpConnectService<'a> {
 impl<'a> TcpConnectService<'a> {
     pub fn new(
         vec_tcp_connect_config: Vec<TcpConnectConfig>,
-        net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
+        msg_cb: &'a mut dyn Fn(MsgEnum),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
         let tcp_connect_num = vec_tcp_connect_config.len();
@@ -52,8 +53,8 @@ impl<'a> TcpConnectService<'a> {
         let vec_tcp_connect = init_tcp_connect(&os_epoll, vec_tcp_connect_config);
 
         Ok(TcpConnectService {
+            msg_cb,
             os_epoll,
-            net_msg_cb,
             vec_tcp_connect,
             epoll_max_events: tcp_connect_num as u16,
             vec_epoll_event: vec![libc::epoll_event { events: 0, u64: 0 }; tcp_connect_num],
@@ -114,19 +115,14 @@ impl<'a> TcpConnectService<'a> {
         //info!("read id:{}", id);
         if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(sid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
-                let mut msg_cb_err_reason = None;
                 loop {
                     match tcp_socket.reader.read(&mut tcp_socket.socket) {
-                        ReadResult::Data(msg_data) => {
-                            match (self.net_msg_cb)(NetMsg {
+                        ReadResult::Data(data) => {
+                            let msg = NetMsg {
                                 sid: sid,
-                                data: msg_data,
-                            }) {
-                                Ok(()) => (),
-                                Err(pid) => {
-                                    msg_cb_err_reason = Some(pid);
-                                }
-                            }
+                                data: data,
+                            };
+                            (self.msg_cb)(MsgEnum::NetMsg(msg));
                         }
                         ReadResult::BufferIsEmpty => {
                             break;
@@ -147,16 +143,6 @@ impl<'a> TcpConnectService<'a> {
                         }
                     }
                 }
-                if let Some(pid) = msg_cb_err_reason {
-                    self.write_net_msg(NetMsg {
-                        sid: sid,
-                        data: Box::new(MsgData {
-                            ext: 0,
-                            data: vec![],
-                            pid: pid as u16,
-                        }),
-                    });
-                }
             }
         } else {
             warn!("read_event tcp_connect_mgmt id no exitis:{}", sid);
@@ -171,8 +157,8 @@ impl<'a> TcpConnectService<'a> {
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                     if tcp_socket.writer.get_msg_data_count() > max_num {
                         // 发送服务繁忙消息
+                        self.send_sys_msg(net_msg.sid, SysMsgId::BusyServer);
                         warn!("net_msg.id:{} Too much msg_data not send", net_msg.sid);
-                        self.send_simple_net_msg(net_msg.sid, ProtoId::BusyServer);
                         return;
                     }
                     match tcp_socket.writer.add_msg_data(net_msg.data) {
@@ -200,7 +186,7 @@ impl<'a> TcpConnectService<'a> {
 
             None => {
                 warn!("net_msg.sid no exitis:{}", net_msg.sid);
-                self.send_simple_net_msg(net_msg.sid, ProtoId::SocketClose);
+                self.send_sys_msg(net_msg.sid, SysMsgId::SocketClose);
             }
         }
     }
@@ -229,20 +215,13 @@ impl<'a> TcpConnectService<'a> {
         }
     }
 
-    fn send_simple_net_msg(&mut self, sid: u64, pid: ProtoId) {
-        match (self.net_msg_cb)(NetMsg {
+    #[inline]
+    fn send_sys_msg(&mut self, sid: u64, smid: SysMsgId) {
+        let msg = SysMsg {
             sid: sid,
-            data: Box::new(MsgData {
-                ext: 0,
-                data: vec![],
-                pid: pid as u16,
-            }),
-        }) {
-            Ok(()) => (),
-            Err(pid) => {
-                warn!("send_simple_net_msg ({}) net_msg_cb return :{:?}", sid, pid);
-            }
-        }
+            smid: smid,
+        };
+        (self.msg_cb)(MsgEnum::SysMsg(msg));
     }
 }
 

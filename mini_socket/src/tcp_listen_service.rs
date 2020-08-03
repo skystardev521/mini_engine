@@ -1,6 +1,7 @@
-use crate::message::MsgData;
+use crate::message::MsgEnum;
 use crate::message::NetMsg;
-use crate::message::ProtoId;
+use crate::message::SysMsg;
+use crate::message::SysMsgId;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
 use crate::tcp_listen::TcpListen;
@@ -27,8 +28,8 @@ pub struct TcpListenService<'a> {
     tcp_listen: TcpListen,
     config: &'a TcpListenConfig,
     tcp_socket_mgmt: TcpSocketMgmt,
+    msg_cb: &'a mut dyn Fn(MsgEnum),
     vec_epoll_event: Vec<libc::epoll_event>,
-    net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
 impl<'a> Drop for TcpListenService<'a> {
@@ -44,7 +45,7 @@ impl<'a> Drop for TcpListenService<'a> {
 impl<'a> TcpListenService<'a> {
     pub fn new(
         config: &'a TcpListenConfig,
-        net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
+        msg_cb: &'a mut dyn Fn(MsgEnum),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
 
@@ -66,7 +67,7 @@ impl<'a> TcpListenService<'a> {
             os_epoll,
             config,
             tcp_listen,
-            net_msg_cb,
+            msg_cb,
             tcp_socket_mgmt,
             vec_epoll_event: vec![
                 libc::epoll_event { events: 0, u64: 0 };
@@ -108,19 +109,14 @@ impl<'a> TcpListenService<'a> {
     fn read_event(&mut self, sid: u64) {
         //info!("read id:{}", id);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
-            let mut msg_cb_err_reason = None;
             loop {
                 match tcp_socket.reader.read(&mut tcp_socket.socket) {
-                    ReadResult::Data(msg_data) => {
-                        match (self.net_msg_cb)(NetMsg {
+                    ReadResult::Data(data) => {
+                        let msg = NetMsg {
                             sid: sid,
-                            data: msg_data,
-                        }) {
-                            Ok(()) => (),
-                            Err(pid) => {
-                                msg_cb_err_reason = Some(pid);
-                            }
-                        }
+                            data: data,
+                        };
+                        (self.msg_cb)(MsgEnum::NetMsg(msg));
                     }
                     ReadResult::BufferIsEmpty => {
                         break;
@@ -136,17 +132,6 @@ impl<'a> TcpListenService<'a> {
                         break;
                     }
                 }
-            }
-            if let Some(pid) = msg_cb_err_reason {
-                //发送到客户端表示系统异常
-                self.write_net_msg(NetMsg {
-                    sid: sid,
-                    data: Box::new(MsgData {
-                        ext: 0,
-                        data: vec![],
-                        pid: pid as u16,
-                    }),
-                });
             }
         } else {
             warn!("read_event tcp_socket_mgmt id no exitis:{}", sid);
@@ -177,7 +162,7 @@ impl<'a> TcpListenService<'a> {
                 }
             }
             None => {
-                self.send_simple_net_msg(net_msg.sid, ProtoId::SocketClose);
+                self.send_sys_msg(net_msg.sid, SysMsgId::SocketClose);
                 warn!("write_net_msg net_msg.id no exitis:{}", net_msg.sid);
             }
         }
@@ -260,14 +245,15 @@ impl<'a> TcpListenService<'a> {
         }
     }
     /// is_send_logic:删除后要不要通知业务层
-    fn del_tcp_socket(&mut self, sid: u64, is_send_logic: bool) {
+    pub fn del_tcp_socket(&mut self, sid: u64, is_send_logic: bool) {
         match self.tcp_socket_mgmt.del_tcp_socket(sid) {
             Ok(tcp_socket) => {
-                if let Err(err) = self.os_epoll.ctl_del_fd(sid, tcp_socket.socket.as_raw_fd()) {
+                let rawfd = tcp_socket.socket.as_raw_fd();
+                if let Err(err) = self.os_epoll.ctl_del_fd(sid, rawfd) {
                     warn!("os_epoll.ctl_del_fd({}) Error:{}", sid, err);
                 }
                 if is_send_logic {
-                    self.send_simple_net_msg(sid, ProtoId::SocketClose);
+                    self.send_sys_msg(sid, SysMsgId::SocketClose);
                 }
             }
             Err(err) => {
@@ -276,20 +262,13 @@ impl<'a> TcpListenService<'a> {
         }
     }
 
-    fn send_simple_net_msg(&mut self, sid: u64, pid: ProtoId) {
-        match (self.net_msg_cb)(NetMsg {
+    #[inline]
+    fn send_sys_msg(&mut self, sid: u64, smid: SysMsgId) {
+        let msg = SysMsg {
             sid: sid,
-            data: Box::new(MsgData {
-                ext: 0,
-                data: vec![],
-                pid: pid as u16,
-            }),
-        }) {
-            Ok(()) => (),
-            Err(pid) => {
-                warn!("send_simple_net_msg ({}) net_msg_cb return :{:?}", sid, pid);
-            }
-        }
+            smid: smid,
+        };
+        (self.msg_cb)(MsgEnum::SysMsg(msg));
     }
 }
 

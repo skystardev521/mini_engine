@@ -2,8 +2,7 @@ use crate::config::Config;
 use crate::lan_service::LanService;
 use crate::wan_service::WanService;
 use log::error;
-use mini_socket::message::NetMsg;
-use mini_socket::message::ProtoId;
+use mini_socket::message::MsgEnum;
 use std::thread;
 use std::time::Duration;
 
@@ -68,13 +67,13 @@ impl Service {
         loop {
             match self.wan_service.receiver() {
                 None => return true,
-                Some(net_msg) => {
-                    self.sender_lan(net_msg);
-                    num += 1;
-                    if num == self.single_max_task_num {
-                        return false;
-                    }
+                Some(msg) => {
+                    self.sender_lan(msg);
                 }
+            }
+            num += 1;
+            if num == self.single_max_task_num {
+                return false;
             }
         }
     }
@@ -85,8 +84,8 @@ impl Service {
         loop {
             match self.lan_service.receiver() {
                 None => return true,
-                Some(net_msg) => {
-                    self.sender_wan(net_msg);
+                Some(msg) => {
+                    self.sender_wan(msg);
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;
@@ -96,11 +95,11 @@ impl Service {
         }
     }
 
-    fn sender_wan(&self, net_msg: NetMsg) {
-        self.wan_service.sender(net_msg);
+    fn sender_wan(&self, msg: MsgEnum) {
+        self.wan_service.sender(msg);
     }
 
-    fn sender_lan(&self, net_msg: NetMsg) {
-        self.lan_service.sender(net_msg);
+    fn sender_lan(&self, msg: MsgEnum) {
+        self.lan_service.sender(msg);
     }
 }

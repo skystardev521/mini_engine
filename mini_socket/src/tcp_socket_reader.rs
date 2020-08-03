@@ -1,5 +1,4 @@
 use crate::message;
-use crate::message::MsgData;
 use mini_utils::bytes;
 use std::io::prelude::Read;
 use std::io::ErrorKind;
@@ -10,7 +9,7 @@ pub enum ReadResult {
     Error(String),
     ReadZeroSize,
     BufferIsEmpty,
-    Data(Box<MsgData>),
+    Data(Vec<u8>),
 }
 
 pub struct TcpSocketReader {
@@ -19,7 +18,7 @@ pub struct TcpSocketReader {
     max_size: usize,
     head_pos: usize,
     data_pos: usize,
-    msg_data: Box<MsgData>,
+    msg_data: Vec<u8>,
     head_data: [u8; message::MSG_HEAD_SIZE],
 }
 
@@ -37,11 +36,7 @@ impl TcpSocketReader {
             data_pos: 0,
             max_size: max_size as usize,
             head_data: [0u8; message::MSG_HEAD_SIZE],
-            msg_data: Box::new(MsgData {
-                pid: 0,
-                ext: 0,
-                data: vec![],
-            }),
+            msg_data: vec![],
         })
     }
 
@@ -52,27 +47,23 @@ impl TcpSocketReader {
                     Ok(0) => return ReadResult::ReadZeroSize,
                     Ok(size) => {
                         self.head_pos += size;
-                        //读取到的字节数
+                        //已读取到的字节数
                         if self.head_pos == message::MSG_HEAD_SIZE {
                             //--------------------decode msg head start-----------------
-                            let new_data = bytes::read_u32(&self.head_data);
-                            let pid =
-                                bytes::read_u16(&self.head_data[message::HEAD_DATA_PID_POS..]);
-                            let ext =
-                                bytes::read_u32(&self.head_data[message::HEAD_DATA_EXT_POS..]);
-
-                            let new_mid = (new_data << 20 >> 20) as u16;
-                            let new_data_size = (new_data >> 12) as usize;
+                            let head_val = bytes::read_u32(&self.head_data);
+                            //消息id
+                            let mid = (head_val << 20 >> 20) as u16;
+                            //消息字节数
+                            let data_size = (head_val >> 12) as usize;
 
                             //--------------------decode msg head end-------------------
-
-                            if new_mid != self.next_mid {
+                            if mid != self.next_mid {
                                 return ReadResult::Error("Msg Id Error".into());
                             }
-                            if new_data_size > self.max_size {
+                            if data_size > self.max_size {
                                 return ReadResult::Error(format!(
                                     "Msg Max Size:{} read size:{}",
-                                    self.max_size, new_data_size
+                                    self.max_size, data_size
                                 ));
                             }
 
@@ -82,21 +73,13 @@ impl TcpSocketReader {
                                 self.next_mid += 1;
                             }
 
-                            if new_data_size == 0 {
+                            if data_size == 0 {
                                 //读完一个包
                                 self.head_pos = 0;
-                                return ReadResult::Data(Box::new(MsgData {
-                                    pid: pid,
-                                    ext: ext,
-                                    data: vec![],
-                                }));
+                                return ReadResult::Data(vec![]);
                             } else {
                                 //读完包头数据
-                                self.msg_data = Box::new(MsgData {
-                                    pid: pid,
-                                    ext: ext,
-                                    data: vec![0u8; new_data_size as usize],
-                                });
+                                self.msg_data = vec![0u8; data_size as usize];
                                 break;
                             }
                         }
@@ -118,24 +101,19 @@ impl TcpSocketReader {
         loop {
             //read msg data
             //如果一个连接在内网死循环发送消息 这里会卡住
-            match socket.read(&mut self.msg_data.data[self.data_pos..]) {
+            match socket.read(&mut self.msg_data[self.data_pos..]) {
                 Ok(0) => return ReadResult::ReadZeroSize,
                 Ok(size) => {
                     //读取到的字节数
                     self.data_pos += size;
-                    if self.data_pos < self.msg_data.data.capacity() {
+                    if self.data_pos < self.msg_data.capacity() {
                         //tcp缓冲区已读完 数据还没有读完
                         return ReadResult::BufferIsEmpty;
                     }
                     //读完一个包
                     self.head_pos = 0;
                     self.data_pos = 0;
-                    let newmsg_data = Box::new(MsgData {
-                        pid: 0,
-                        ext: 0,
-                        data: vec![],
-                    });
-                    return ReadResult::Data(mem::replace(&mut self.msg_data, newmsg_data));
+                    return ReadResult::Data(mem::replace(&mut self.msg_data, vec![]));
                 }
                 Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
                     //info!("ErrorKind::WouldBlock");

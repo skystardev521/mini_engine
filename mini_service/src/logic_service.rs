@@ -1,8 +1,7 @@
 use crate::config::Config;
 use crate::conn_service::ConnService;
 use log::error;
-use mini_socket::message::NetMsg;
-use mini_socket::message::ProtoId;
+use mini_socket::message::MsgEnum;
 use std::thread;
 use std::time::Duration;
 
@@ -61,26 +60,25 @@ impl LogicService {
         loop {
             match self.conn_service.receiver() {
                 None => return true,
-                Some(net_msg) => {
-                    error!("receiver:{}", net_msg.sid);
-                    self.net_sender(net_msg);
-                    num += 1;
-                    if num == self.single_max_task_num {
-                        return false;
-                    }
+                Some(msg) => {
+                    self.net_sender(msg);
                 }
+            }
+            num += 1;
+            if num == self.single_max_task_num {
+                return false;
             }
         }
     }
 
-    fn net_sender(&self, net_msg: NetMsg) -> bool {
-        self.conn_service.sender(net_msg)
+    fn net_sender(&self, msg: MsgEnum) -> bool {
+        self.conn_service.sender(msg)
     }
 
     /*
-    pub fn new_net_msg(&mut self, net_msg: NetMsg) {
-        //info!("new_net_msg id:{}", net_msg.id);
-        match (self.net_msg_cb)(net_msg) {
+    pub fn new_net_msg(&mut self, lan_msg: NetMsg) {
+        //info!("new_net_msg id:{}", lan_msg.id);
+        match (self.net_msg_cb)(lan_msg) {
             Ok(()) => (),
             Err(pid) => error!("net msg cb:{:?}", pid),
         }
