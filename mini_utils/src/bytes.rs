@@ -652,6 +652,20 @@ pub fn read_f64(buffer: &[u8]) -> f64 {
     }
 }
 
+#[inline]
+pub fn read_bytes(buffer: &[u8]) -> Vec<u8> {
+    let len = buffer.len();
+    if len == 0 {
+        debug_assert!(false);
+        return vec![];
+    }
+    let mut result = vec![0u8; len];
+    unsafe {
+        std::ptr::copy_nonoverlapping(buffer.as_ptr(), result[0..len].as_mut_ptr(), len);
+    }
+    result
+}
+
 /*
 fn test() {
     let mut buffer = vec![0u8; 16];

@@ -1,10 +1,8 @@
 use log::{error, info, warn};
-
-use mini_socket::message::MsgData;
-
 use mini_socket::tcp_socket::TcpSocket;
 use mini_socket::tcp_socket_reader::ReadResult;
 use mini_socket::tcp_socket_writer::WriteResult;
+use mini_utils::bytes;
 
 use std::net::Shutdown;
 use std::net::TcpStream;
@@ -21,7 +19,7 @@ pub fn test() {
 
     thread::sleep(std::time::Duration::from_secs(1));
 
-    for _ in 0..1 {
+    for _ in 0..300 {
         thread_pool.push(new_client().unwrap());
     }
 
@@ -38,24 +36,12 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
     let mut client = TcpSocket::new(socket, 10240);
     thread::spawn(move || {
         info!("client-->{:?}", std::thread::current().id());
-        let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
-
-        let buffer = str.as_bytes();
-        let mut msg_len = 512;
         let mut msg_num: u64 = 0;
-        loop {
-            //msg_len += 1;
-            if msg_len == str.len() {
-                msg_len = 512;
-            }
-            let mut data: Vec<u8> = vec![0u8; msg_len];
-            data.copy_from_slice(&buffer[0..msg_len]);
 
-            let msg_data = Box::new(MsgData {
-                pid: 1,
-                ext: 0,
-                data: data,
-            });
+        let mut ext_data: u32 = 0;
+        loop {
+            ext_data += 1;
+            let msg_data = encode(ext_data);
 
             if let Err(err) = client.writer.add_msg_data(msg_data) {
                 info!("add_msg_data result err:{}", err);
@@ -69,6 +55,23 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
             }
         }
     })
+}
+
+fn encode(ext: u32) -> Vec<u8> {
+    let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+    let len = 2 + 4 + 512;
+    let mut buffer: Vec<u8> = vec![0u8; len];
+    bytes::write_u16(&mut buffer, 123);
+    bytes::write_u32(&mut buffer, ext);
+    bytes::write_bytes(&mut buffer, &str.as_bytes()[0..512]);
+    buffer
+}
+
+fn decode(buffer: &Vec<u8>) -> (u16, u32, Vec<u8>) {
+    let pid = bytes::read_u16(&buffer);
+    let ext = bytes::read_u32(&buffer[2..]);
+    let data = bytes::read_bytes(&buffer[6..]);
+    (pid, ext, data)
 }
 
 fn write(client: &mut TcpSocket) -> bool {
@@ -110,12 +113,15 @@ fn read(client: &mut TcpSocket) -> bool {
     loop {
         match client.reader.read(&mut client.socket) {
             ReadResult::Data(msg_data) => {
+                let (pid, ext, data) = decode(&msg_data);
+                /*
                 info!(
-                    "read id:{} data:{:?}",
-                    &msg_data.pid,
-                    String::from_utf8_lossy(&msg_data.data).to_string()
+                    "read pid:{} ext:{} data:{}",
+                    pid,
+                    ext,
+                    String::from_utf8_lossy(&data).to_string()
                 );
-
+                */
                 msg_num += 1;
                 if msg_num % 10000 == 0 {
                     info!("read data:{}", msg_num);

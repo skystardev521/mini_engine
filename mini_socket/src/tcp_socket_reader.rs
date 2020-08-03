@@ -50,11 +50,11 @@ impl TcpSocketReader {
                         //已读取到的字节数
                         if self.head_pos == message::MSG_HEAD_SIZE {
                             //--------------------decode msg head start-----------------
-                            let head_val = bytes::read_u32(&self.head_data);
+                            let size_and_mid = bytes::read_u32(&self.head_data);
                             //消息id
-                            let mid = (head_val << 20 >> 20) as u16;
+                            let mid = (size_and_mid << 20 >> 20) as u16;
                             //消息字节数
-                            let data_size = (head_val >> 12) as usize;
+                            let data_size = (size_and_mid >> 12) as usize;
 
                             //--------------------decode msg head end-------------------
                             if mid != self.next_mid {
