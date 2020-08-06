@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::conn_service::ConnService;
-use log::error;
+use log::{error, warn};
 use mini_socket::message::MsgEnum;
 use std::thread;
 use std::time::Duration;
@@ -23,10 +23,7 @@ impl Drop for LogicService {
 }
 
 impl LogicService {
-    pub fn new(
-        config: Config,
-        //net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
-    ) -> Result<Self, String> {
+    pub fn new(config: Config) -> Result<Self, String> {
         let vec_tcp_connect_config = config.vec_tcp_connect_config.clone();
         let conn_service = ConnService::new(&config.worker_config, vec_tcp_connect_config)?;
 
@@ -50,7 +47,6 @@ impl LogicService {
 
             if is_sleep {
                 thread::sleep(self.sleep_duration);
-                error!("sleep_duration:{}", self.sleep_duration.as_millis());
             }
         }
     }
@@ -62,6 +58,7 @@ impl LogicService {
                 None => return true,
                 Some(msg) => {
                     self.net_sender(msg);
+                    //warn!("sender net msg")
                 }
             }
             num += 1;
@@ -74,16 +71,6 @@ impl LogicService {
     fn net_sender(&self, msg: MsgEnum) -> bool {
         self.conn_service.sender(msg)
     }
-
-    /*
-    pub fn new_net_msg(&mut self, lan_msg: NetMsg) {
-        //info!("new_net_msg id:{}", lan_msg.id);
-        match (self.net_msg_cb)(lan_msg) {
-            Ok(()) => (),
-            Err(pid) => error!("net msg cb:{:?}", pid),
-        }
-    }
-    */
 
     pub fn tick(&self) {}
 }

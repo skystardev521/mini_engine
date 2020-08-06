@@ -19,7 +19,7 @@ pub fn test() {
 
     thread::sleep(std::time::Duration::from_secs(1));
 
-    for _ in 0..300 {
+    for _ in 0..100 {
         thread_pool.push(new_client().unwrap());
     }
 
@@ -80,7 +80,7 @@ fn write(client: &mut TcpSocket) -> bool {
         match client.writer.write(&mut client.socket) {
             WriteResult::Finish => {
                 //info!("write result:Finish");
-                thread::sleep(std::time::Duration::from_millis(10));
+                //thread::sleep(std::time::Duration::from_millis(10));
                 //return true; //
 
                 //info!("write data:{}", msg_num);
@@ -109,22 +109,22 @@ fn loop_read(socket: TcpStream) -> thread::JoinHandle<()> {
 }
 
 fn read(client: &mut TcpSocket) -> bool {
-    let mut msg_num: u64 = 0;
+    //let mut msg_num: u64 = 0;
     loop {
         match client.reader.read(&mut client.socket) {
             ReadResult::Data(msg_data) => {
                 let (pid, ext, data) = decode(&msg_data);
-                /*
+                
                 info!(
                     "read pid:{} ext:{} data:{}",
                     pid,
                     ext,
                     String::from_utf8_lossy(&data).to_string()
                 );
-                */
-                msg_num += 1;
-                if msg_num % 10000 == 0 {
-                    info!("read data:{}", msg_num);
+                
+                //msg_num += 1;
+                if ext % 10000 == 0 {
+                    info!("read ext data:{}", ext);
                 }
                 //break;
             }

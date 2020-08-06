@@ -50,11 +50,8 @@ impl<'a> TcpListenService<'a> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
 
         let tcp_listen = TcpListen::new(&config.bind_socket_addr)?;
-        os_epoll.ctl_add_fd(
-            TCP_LISTEN_ID,
-            tcp_listen.get_listen().as_raw_fd(),
-            libc::EPOLLIN,
-        )?;
+        let rawfd = tcp_listen.get_listen().as_raw_fd();
+        os_epoll.ctl_add_fd(TCP_LISTEN_ID, rawfd, libc::EPOLLIN)?;
 
         let tcp_socket_mgmt = TcpSocketMgmt::new(
             TCP_LISTEN_ID,
@@ -76,12 +73,15 @@ impl<'a> TcpListenService<'a> {
         })
     }
     pub fn tick(&mut self) {}
-    pub fn epoll_event(&mut self, epoll_wait_timeout: i32) -> Result<u16, String> {
-        match self
-            .os_epoll
-            .wait(epoll_wait_timeout, &mut self.vec_epoll_event)
-        {
-            Ok(0) => return Ok(0),
+
+    /// 获取连接的 tcp_sokcet 数量
+    #[inline]
+    pub fn tcp_socket_count(&self) -> u32 {
+        self.tcp_socket_mgmt.tcp_socket_count()
+    }
+    pub fn epoll_event(&mut self, wait_timeout: i32) -> Result<u32, String> {
+        match self.os_epoll.wait(wait_timeout, &mut self.vec_epoll_event) {
+            Ok(0) => Ok(0),
             Ok(epevs) => {
                 for n in 0..epevs as usize {
                     let event = self.vec_epoll_event[n];
@@ -100,14 +100,14 @@ impl<'a> TcpListenService<'a> {
                         self.error_event(event.u64, Error::last_os_error().to_string());
                     }
                 }
-                return Ok(epevs as u16);
+                return Ok(epevs);
             }
-            Err(err) => return Err(err),
+            Err(err) => Err(err),
         }
     }
 
     fn read_event(&mut self, sid: u64) {
-        //info!("read id:{}", id);
+        info!("read id:{}", sid);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
             loop {
                 match tcp_socket.reader.read(&mut tcp_socket.socket) {
@@ -232,6 +232,7 @@ impl<'a> TcpListenService<'a> {
 
         match self.tcp_socket_mgmt.add_tcp_socket(socket) {
             Ok(sid) => {
+                error!("tcp_socket_mgmt.add_tcp_socket sid:{}", sid);
                 match self.os_epoll.ctl_add_fd(sid, raw_fd, libc::EPOLLIN) {
                     Ok(()) => (),
                     Err(err) => {

@@ -28,9 +28,9 @@ impl TcpConnectConfig {
             tcp_nodelay_value: false,
             socket_read_buffer: 512000,
             socket_write_buffer: 512000,
-            wait_write_msg_max_num: 8192,
+            wait_write_msg_max_num: u16::MAX,
             connect_timeout_duration: 15,
-            name: "Conn_Name".into(),
+            name: "Conn_Socket_Addr".into(),
             socket_addr: "0.0.0.0:8888".into(),
         }
     }

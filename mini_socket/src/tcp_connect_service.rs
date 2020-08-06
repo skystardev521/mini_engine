@@ -86,12 +86,12 @@ impl<'a> TcpConnectService<'a> {
         self.epoll_max_events
     }
 
-    pub fn epoll_event(&mut self, epoll_wait_timeout: i32) -> Result<u16, String> {
+    pub fn epoll_event(&mut self, epoll_wait_timeout: i32) -> Result<u32, String> {
         match self
             .os_epoll
             .wait(epoll_wait_timeout, &mut self.vec_epoll_event)
         {
-            Ok(0) => return Ok(0),
+            Ok(0) => Ok(0),
             Ok(epevs) => {
                 for n in 0..epevs as usize {
                     let event = self.vec_epoll_event[n];
@@ -105,9 +105,9 @@ impl<'a> TcpConnectService<'a> {
                         self.error_event(event.u64, Error::last_os_error().to_string());
                     }
                 }
-                return Ok(epevs as u16);
+                Ok(epevs)
             }
-            Err(err) => return Err(err),
+            Err(err) => Err(err),
         }
     }
 

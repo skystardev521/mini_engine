@@ -57,7 +57,7 @@ impl TcpSocketMgmt {
     }
 
     #[inline]
-    pub fn total_socket(&self) -> u32 {
+    pub fn tcp_socket_count(&self) -> u32 {
         self.tcp_socket_hash_map.len() as u32
     }
 

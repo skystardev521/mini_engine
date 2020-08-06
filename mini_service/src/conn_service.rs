@@ -52,7 +52,7 @@ impl ConnService {
                 return true;
             }
             SendResEnum::Full(_) => {
-                warn!("Worker:{} Full", self.worker.get_name());
+                error!("Worker:{} Sender Full", self.worker.get_name());
                 return false;
             }
             SendResEnum::Disconnected(_) => {
@@ -95,18 +95,28 @@ fn worker_closure(
             //-----------------------------------------------------------------------------
             let mut epoll_wait_timeout = 0;
             let mut single_write_msg_count;
+            let mut single_call_epoll_wait_count;
+            let single_call_epoll_wait_max_num = 8;
             loop {
                 tcp_connect_service.tick();
-                match tcp_connect_service.epoll_event(epoll_wait_timeout) {
-                    Ok(0) => epoll_wait_timeout = 1,
-                    Ok(epevs) => {
-                        if epevs == tcp_connect_service.get_epoll_max_events() {
-                            epoll_wait_timeout = 0;
+                single_call_epoll_wait_count = 0;
+                loop {
+                    match tcp_connect_service.epoll_event(epoll_wait_timeout) {
+                        Ok(0) => {
+                            epoll_wait_timeout = 1;
+                            break;
                         }
-                    }
-                    Err(err) => {
-                        error!("TcpConnectService epoll_event:{}", err);
-                        break;
+                        Ok(_) => {
+                            epoll_wait_timeout = 0;
+                            single_call_epoll_wait_count += 1;
+                            if single_call_epoll_wait_count == single_call_epoll_wait_max_num {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            error!("tcp_connect_service epoll_event:{}", err);
+                            break;
+                        }
                     }
                 }
                 //-----------------------------------------------------------------------------
@@ -124,7 +134,6 @@ fn worker_closure(
                         }
                         Ok(MsgEnum::SysMsg(sys_msg)) => {}
                         Err(TryRecvError::Empty) => break,
-
                         Err(TryRecvError::Disconnected) => {
                             error!("ConnService receiver.try_recv:Disconnected");
                             break;

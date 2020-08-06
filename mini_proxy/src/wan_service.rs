@@ -52,7 +52,7 @@ impl WanService {
                 return true;
             }
             SendResEnum::Full(_) => {
-                warn!("Worker:{} Full", self.worker.get_name());
+                error!("Worker:{} Sender Full", self.worker.get_name());
                 return false;
             }
             SendResEnum::Disconnected(_) => {
@@ -94,25 +94,40 @@ fn worker_closure(
             //-----------------------------------------------------------------------------
             let mut epoll_wait_timeout = 0;
             let mut single_write_msg_count;
+            let mut single_call_epoll_wait_count;
             let single_write_msg_max_num = tcp_listen_config.single_write_msg_max_num;
+            let single_call_epoll_wait_max_num = tcp_listen_config.single_call_epoll_wait_max_num;
             loop {
                 tcp_listen_service.tick();
-
-                match tcp_listen_service.epoll_event(epoll_wait_timeout) {
-                    Ok(0) => epoll_wait_timeout = 1,
-                    Ok(num) => {
-                        if num == tcp_listen_config.epoll_max_events {
-                            epoll_wait_timeout = 0;
+                single_call_epoll_wait_count = 0;
+                loop {
+                    match tcp_listen_service.epoll_event(epoll_wait_timeout) {
+                        Ok(0) => {
+                            epoll_wait_timeout = 1;
+                            //warn!("epoll_wait_timeout = 1");
+                            break;
                         }
-                    }
-                    Err(err) => {
-                        error!("TcpListenService epoll_event:{}", err);
-                        break;
+                        Ok(num) => {
+                            epoll_wait_timeout = 0;
+                            single_call_epoll_wait_count += 1;
+                            /*
+                            warn!(
+                                "single_call_epoll_wait_count:{} num:{}",
+                                single_call_epoll_wait_count, num
+                            );
+                            */
+                            if single_call_epoll_wait_count == single_call_epoll_wait_max_num {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            error!("TcpListenService epoll_event:{}", err);
+                            break;
+                        }
                     }
                 }
                 //-----------------------------------------------------------------------------
                 single_write_msg_count = 0;
-
                 loop {
                     match receiver.try_recv() {
                         Ok(MsgEnum::NetMsg(net_msg)) => {
@@ -130,7 +145,6 @@ fn worker_closure(
                             }
                         }
                         Err(TryRecvError::Empty) => break,
-
                         Err(TryRecvError::Disconnected) => {
                             error!("WanService receiver.try_recv:Disconnected");
                             break;

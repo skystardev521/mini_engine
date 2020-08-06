@@ -2,6 +2,7 @@
 pub struct TcpListenConfig {
     pub msg_max_size: u32,
     pub max_tcp_socket: u32,
+    /// epoll每次触发最大事件数
     pub epoll_max_events: u16,
     /// 是否tcp不缓存有数据就发送
     pub tcp_nodelay_value: bool,
@@ -9,8 +10,12 @@ pub struct TcpListenConfig {
     pub bind_socket_addr: String,
     pub socket_read_buffer: u32,
     pub socket_write_buffer: u32,
+    /// 每条连接等待发送的最大消息数
     pub wait_write_msg_max_num: u16,
+    /// 单次发送消息到tcp_listen的数量
     pub single_write_msg_max_num: u16,
+    /// 单次调用epoll_wait函数最大次数
+    pub single_call_epoll_wait_max_num: u8,
 }
 
 impl TcpListenConfig {
@@ -25,6 +30,7 @@ impl TcpListenConfig {
             tcp_nodelay_value: false,
             wait_write_msg_max_num: 128,
             single_write_msg_max_num: 256,
+            single_call_epoll_wait_max_num: 8,
             bind_socket_addr: "0.0.0.0:9999".into(),
         }
     }
@@ -76,6 +82,10 @@ impl TcpListenConfig {
 
     pub fn set_single_write_msg_max_num(&mut self, val: u16) -> &mut Self {
         self.single_write_msg_max_num = val;
+        self
+    }
+    pub fn set_single_call_epoll_wait_max_num(&mut self, val: u8) -> &mut Self {
+        self.single_call_epoll_wait_max_num = val;
         self
     }
 }

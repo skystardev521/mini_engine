@@ -8,12 +8,10 @@ use std::time::Duration;
 
 /// 用于把 广域网的数据 转到 局域网服务中
 pub struct Service {
-    //config: &'a Config,
     wan_service: WanService,
     lan_service: LanService,
     single_max_task_num: u16,
     sleep_duration: Duration,
-    //net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
 impl Drop for Service {
@@ -27,10 +25,7 @@ impl Drop for Service {
 }
 
 impl Service {
-    pub fn new(
-        config: Config,
-        //net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
-    ) -> Result<Self, String> {
+    pub fn new(config: Config) -> Result<Self, String> {
         let wan_service = WanService::new(&config.worker_config, config.wan_listen_config.clone())?;
         let lan_service = LanService::new(&config.worker_config, config.lan_listen_config.clone())?;
 
@@ -38,7 +33,6 @@ impl Service {
         let single_max_task_num = config.worker_config.get_single_max_task_num();
 
         Ok(Service {
-            //config,
             wan_service,
             lan_service,
             sleep_duration: sleep_duration,
@@ -68,7 +62,8 @@ impl Service {
             match self.wan_service.receiver() {
                 None => return true,
                 Some(msg) => {
-                    self.sender_lan(msg);
+                    //self.sender_lan(msg);
+                    //self.sender_wan(msg);
                 }
             }
             num += 1;
