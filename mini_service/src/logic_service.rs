@@ -1,7 +1,8 @@
 use crate::config::Config;
 use crate::conn_service::ConnService;
+use crate::net_message::MsgEnum;
 use log::{error, warn};
-use mini_socket::message::MsgEnum;
+use mini_socket::message::ErrMsg;
 use std::thread;
 use std::time::Duration;
 
@@ -58,7 +59,6 @@ impl LogicService {
                 None => return true,
                 Some(msg) => {
                     self.net_sender(msg);
-                    //warn!("sender net msg")
                 }
             }
             num += 1;

@@ -1,8 +1,12 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
+use crate::net_message::LanErrMsg;
+use crate::net_message::LanMsgEnum;
+use crate::net_message::LanNetMsg;
+use crate::net_message::WanMsgEnum;
 use crate::wan_service::WanService;
 use log::error;
-use mini_socket::message::MsgEnum;
+use mini_utils::bytes;
 use std::thread;
 use std::time::Duration;
 
@@ -63,6 +67,29 @@ impl Service {
                 None => return true,
                 Some(msg) => {
                     //self.sender_lan(msg);
+                    self.sender_wan(msg);
+                }
+                //要把tcp_socket id  转 用户id
+                Some(WanMsgEnum::NetMsg(sid, msg)) => {
+                    self.sender_lan(LanMsgEnum::NetMsg(
+                        sid,
+                        LanNetMsg {
+                            sid: sid,
+                            data: msg,
+                        },
+                    ));
+                    //self.sender_wan(msg);
+                }
+
+                //要把tcp_socket id  转 用户id
+                Some(WanMsgEnum::ErrMsg(sid, msg)) => {
+                    self.sender_lan(LanMsgEnum::ErrMsg(
+                        sid,
+                        LanErrMsg {
+                            sid: sid,
+                            data: msg,
+                        },
+                    ));
                     //self.sender_wan(msg);
                 }
             }
@@ -79,8 +106,17 @@ impl Service {
         loop {
             match self.lan_service.receiver() {
                 None => return true,
-                Some(msg) => {
-                    self.sender_wan(msg);
+                //要把 用户id 转 tcp_socket id
+                Some(LanMsgEnum::NetMsg(sid, msg)) => {
+                    self.sender_wan(WanMsgEnum::NetMsg(msg.sid, msg.data));
+                    num += 1;
+                    if num == self.single_max_task_num {
+                        return false;
+                    }
+                }
+                //要把 用户id 转 tcp_socket id
+                Some(LanMsgEnum::ErrMsg(sid, msg)) => {
+                    self.sender_wan(WanMsgEnum::ErrMsg(msg.sid, msg.data));
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;
@@ -90,11 +126,42 @@ impl Service {
         }
     }
 
-    fn sender_wan(&self, msg: MsgEnum) {
+    fn sender_wan(&self, msg: WanMsgEnum) {
         self.wan_service.sender(msg);
     }
 
-    fn sender_lan(&self, msg: MsgEnum) {
+    fn sender_lan(&self, msg: LanMsgEnum) {
         self.lan_service.sender(msg);
     }
+
+    fn decode_id(buffer: &Vec<u8>) -> Result<u16, &str> {
+        if buffer.len() < 2 {
+            Err("data len is 0")
+        } else {
+            Ok(bytes::read_u16(&buffer))
+        }
+    }
+
+    fn encode(buffer: &Vec<u8>) {}
+
+    /*
+    fn encode(ext: u32) -> Vec<u8> {
+        let str = "0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789AaBbCcDdEdFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+        let len = 2 + 4 + 250;
+        let mut buffer: Vec<u8> = vec![0u8; len];
+        bytes::write_u16(&mut buffer, 123);
+        bytes::write_u32(&mut buffer[2..], ext);
+        bytes::write_bytes(&mut buffer[6..], &str.as_bytes()[0..250]);
+        //warn!("encode buffer len:{} ext:{}", buffer.len(), ext);
+        buffer
+    }
+
+    fn decode(buffer: &Vec<u8>) -> (u16, u32, Vec<u8>) {
+        //warn!("decode buffer len:{}", buffer.len());
+        let pid = bytes::read_u16(&buffer);
+        let ext = bytes::read_u32(&buffer[2..]);
+        let data = bytes::read_bytes(&buffer[6..]);
+        (pid, ext, data)
+    }
+    */
 }

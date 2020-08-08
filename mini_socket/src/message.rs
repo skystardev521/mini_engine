@@ -1,3 +1,32 @@
+#[derive(Debug, PartialEq)]
+pub enum ErrMsg {
+    /// 新建一个链接
+    NewSocket = 0,
+
+    /// 断开网络
+    CloseSocket = 1,
+
+    /// 网络已断开
+    SocketClose = 2,
+
+    /// 服务繁忙
+    BusyServer = 3,
+
+    /// 消息队列已满
+    MsgQueueIsFull = 4,
+
+    /// 服务器异常
+    ExceptionServer = 5,
+
+    /// Socket Id not exist
+    SocketIdNotExist = 6,
+
+    SysMsgIdMaxValue = 255,
+}
+
+/*
+
+
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;
 
@@ -41,7 +70,7 @@ pub enum SysMsgId {
 
     SysMsgIdMaxValue = 255,
 }
-
+*/
 /*
 ///数据包头长度 10 个字节
 /// msg id: 0~4095

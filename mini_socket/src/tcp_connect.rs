@@ -2,25 +2,26 @@ use crate::tcp_connect_config::TcpConnectConfig;
 use crate::tcp_socket::TcpSocket;
 use std::cell::Cell;
 
-pub struct TcpConnect {
-    id: u64,
+pub struct TcpConnect<MSG> {
+    sid: u64,
     config: TcpConnectConfig,
     last_reconnect_timestamp: Cell<u64>,
-    tcp_socket_opt: Option<TcpSocket>,
+    tcp_socket_opt: Option<TcpSocket<MSG>>,
+    /////TcpSocket断开后可以先把数据存放到这里
 }
 
-impl TcpConnect {
-    pub fn new(id: u64, config: TcpConnectConfig, tcp_socket: Option<TcpSocket>) -> Self {
+impl<MSG> TcpConnect<MSG> {
+    pub fn new(sid: u64, config: TcpConnectConfig, tcp_socket: Option<TcpSocket<MSG>>) -> Self {
         TcpConnect {
-            id,
+            sid,
             config,
             tcp_socket_opt: tcp_socket,
             last_reconnect_timestamp: Cell::new(0),
         }
     }
     #[inline]
-    pub fn get_id(&self) -> u64 {
-        self.id
+    pub fn get_sid(&self) -> u64 {
+        self.sid
     }
 
     #[inline]
@@ -41,12 +42,12 @@ impl TcpConnect {
     }
 
     #[inline]
-    pub fn get_tcp_socket_opt(&mut self) -> &mut Option<TcpSocket> {
+    pub fn get_tcp_socket_opt(&mut self) -> &mut Option<TcpSocket<MSG>> {
         &mut self.tcp_socket_opt
     }
 
     #[inline]
-    pub fn set_tcp_socket_opt(&mut self, tcp_socket_opt: Option<TcpSocket>) {
+    pub fn set_tcp_socket_opt(&mut self, tcp_socket_opt: Option<TcpSocket<MSG>>) {
         self.tcp_socket_opt = tcp_socket_opt
     }
 }

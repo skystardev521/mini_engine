@@ -5,10 +5,16 @@ use config::Config;
 use mini_utils::logger::Logger;
 use std::thread::{self, Builder};
 use std::time::Duration;
+
+mod auth;
 mod config;
+mod lan_buf_rw;
 mod lan_service;
+mod net_message;
 mod service;
+mod wan_buf_rw;
 mod wan_service;
+
 use mini_utils::time;
 
 const LOG_FILE_DURATION: u64 = 60 * 60 * 1000;

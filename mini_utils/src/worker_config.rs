@@ -3,10 +3,13 @@ use std::time::Duration;
 #[derive(Clone, Debug)]
 pub struct WorkerConfig {
     name: String,
+    /// defalut:0
     stack_size: usize,
+    /// defalut:163840
     channel_size: u32,
+    /// defalut:1024
     single_max_task_num: u16,
-    /// 单位毫秒
+    /// defalut: 1 milis
     sleep_duration: Duration,
 }
 
@@ -14,10 +17,10 @@ impl WorkerConfig {
     pub fn new() -> Self {
         WorkerConfig {
             stack_size: 0,
-            channel_size: 81920,
+            channel_size: 163840,
             single_max_task_num: 1024,
             name: String::from("WorkerConfig"),
-            sleep_duration: Duration::from_millis(2),
+            sleep_duration: Duration::from_millis(1),
         }
     }
 

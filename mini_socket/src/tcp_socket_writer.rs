@@ -50,10 +50,10 @@ impl TcpSocketWriter {
 
     #[inline]
     pub fn add_msg_data(&mut self, msg_data: Vec<u8>) -> Result<(), String> {
-        if msg_data.len() <= self.max_size {
+        if msg_data.len() > 0 && msg_data.len() <= self.max_size {
             Ok(self.vec_deque.push_back(msg_data))
         } else {
-            Err(String::from("MsgSizeTooBig"))
+            Err(String::from("msg_data byte size error"))
         }
     }
 
