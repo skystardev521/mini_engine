@@ -5,19 +5,17 @@ use std::net::TcpStream;
 
 use crate::net_message::LanNetMsg;
 
-pub struct LanBufRw {
-    t: u16,
-}
+pub struct LanBufRw {}
 
 impl Default for LanBufRw {
     fn default() -> Self {
-        LanBufRw { t: 0 }
+        LanBufRw {}
     }
 }
 
 impl TcpBufRw<LanNetMsg> for LanBufRw {
     /// 网络数据包体 最大字节数
-    fn set_max_size(&mut self, size: usize) {}
+    fn set_msg_max_size(&mut self, msg_max_size: usize) {}
 
     /// 把数据写到tcp buffer中
     fn write(&mut self, socket: &mut TcpStream, data: &LanNetMsg) -> WriteResult {

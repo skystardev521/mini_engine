@@ -15,7 +15,7 @@ impl Default for WanBufRw {
 
 impl TcpBufRw<Vec<u8>> for WanBufRw {
     /// 网络数据包体 最大字节数
-    fn set_max_size(&mut self, size: usize) {}
+    fn set_msg_max_size(&mut self, msg_max_size: usize) {}
 
     /// 把数据写到tcp buffer中
     fn write(&mut self, socket: &mut TcpStream, data: &Vec<u8>) -> WriteResult {

@@ -26,12 +26,12 @@ impl ConnService {
         workers_config: &WorkerConfig,
         vec_tcp_connect_config: Vec<TcpConnectConfig>,
     ) -> Result<Self, String> {
-        let max_task_num = workers_config.get_single_max_task_num();
+        //let max_task_num = workers_config.get_single_max_task_num();
         let worker = Worker::new(
             String::from("ConnService"),
             workers_config.get_stack_size(),
             workers_config.get_channel_size(),
-            worker_closure(max_task_num, vec_tcp_connect_config),
+            worker_closure(vec_tcp_connect_config),
         )?;
 
         Ok(ConnService { worker: worker })
@@ -67,7 +67,6 @@ impl ConnService {
 }
 
 fn worker_closure(
-    single_write_msg_max_num: u16,
     vec_tcp_connect_config: Vec<TcpConnectConfig>,
 ) -> Box<dyn FnOnce(Receiver<MsgEnum>, SyncSender<MsgEnum>) + Send> {
     Box::new(
@@ -111,25 +110,14 @@ fn worker_closure(
             }
             //-----------------------------------------------------------------------------
             let wait_timeout = 1;
-            //let mut single_write_msg_count;
-            let mut single_call_epoll_wait_count;
-            let single_call_epoll_wait_max_num = 32;
             loop {
                 tcp_connect_service.tick();
-                single_call_epoll_wait_count = 0;
                 loop {
                     match tcp_connect_service.epoll_event(wait_timeout) {
                         Ok(0) => {
                             break;
                         }
-                        Ok(_) => {
-                            /*
-                            single_call_epoll_wait_count += 1;
-                            if single_call_epoll_wait_count == single_call_epoll_wait_max_num {
-                                break;
-                            }
-                            */
-                        }
+                        Ok(_) => {}
                         Err(err) => {
                             error!("tcp_connect_service epoll_event:{}", err);
                             break;
@@ -137,18 +125,11 @@ fn worker_closure(
                     }
                 }
                 //-----------------------------------------------------------------------------
-                //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
                         Ok(MsgEnum::NetMsg(sid, net_msg)) => {
                             //这里要优化 判断是否广播消息
                             tcp_connect_service.write_net_msg(sid, net_msg);
-                            /*
-                            single_write_msg_count += 1;
-                            if single_write_msg_count == single_write_msg_max_num {
-                                break;
-                            }
-                            */
                         }
                         Ok(MsgEnum::ErrMsg(_sid, _sys_msg)) => {}
                         Err(TryRecvError::Empty) => break,

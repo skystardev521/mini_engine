@@ -89,10 +89,10 @@ impl<MSG> TcpSocketMgmt<MSG> {
             return Err("Max Socket Number".into());
         }
         self.next_sid = self.next_sid();
-        let mut ttb = Box::new(TBRW::default());
-        ttb.set_max_size(self.msg_max_size);
+        let mut tcp_buf_rw = Box::new(TBRW::default());
+        tcp_buf_rw.set_msg_max_size(self.msg_max_size);
         self.tcp_socket_hash_map
-            .insert(self.next_sid, TcpSocket::new(socket, ttb));
+            .insert(self.next_sid, TcpSocket::new(socket, tcp_buf_rw));
         Ok(self.next_sid)
     }
 }

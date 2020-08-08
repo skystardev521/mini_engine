@@ -10,7 +10,6 @@ pub struct LogicService {
     sleep_duration: Duration,
     single_max_task_num: u16,
     conn_service: ConnService,
-    //net_msg_cb: &'a mut dyn Fn(NetMsg) -> Result<(), ProtoId>,
 }
 
 impl Drop for LogicService {

@@ -113,26 +113,14 @@ fn worker_closure(
 
             //-----------------------------------------------------------------------------
             let wait_timeout = 1;
-            //let mut single_write_msg_count;
-            let mut single_call_epoll_wait_count;
-            let single_write_msg_max_num = tcp_listen_config.single_write_msg_max_num;
-            let single_call_epoll_wait_max_num = tcp_listen_config.single_call_epoll_wait_max_num;
             loop {
                 tcp_listen_service.tick();
-                single_call_epoll_wait_count = 0;
                 loop {
                     match tcp_listen_service.epoll_event(wait_timeout) {
                         Ok(0) => {
                             break;
                         }
-                        Ok(_) => {
-                            /*
-                            single_call_epoll_wait_count += 1;
-                            if single_call_epoll_wait_count == single_call_epoll_wait_max_num {
-                                break;
-                            }
-                            */
-                        }
+                        Ok(_) => {}
                         Err(err) => {
                             error!("TcpListenService epoll_event:{}", err);
                             break;
@@ -146,12 +134,6 @@ fn worker_closure(
                         Ok(LanMsgEnum::NetMsg(sid, net_msg)) => {
                             //这里要优化 判断是否广播消息
                             tcp_listen_service.write_net_msg(sid, net_msg);
-                            /*
-                            single_write_msg_count += 1;
-                            if single_write_msg_count == single_write_msg_max_num {
-                                break;
-                            }
-                            */
                         }
                         Ok(LanMsgEnum::ErrMsg(_sid, _err_msg)) => {}
                         Err(TryRecvError::Empty) => break,
