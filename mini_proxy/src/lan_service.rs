@@ -72,7 +72,7 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<LanMsgEnum>, sender: SyncSender<LanMsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, net_msg: LanNetMsg| {
+            let mut net_msg_cb_fn = |sid: u64, net_msg: Box<LanNetMsg>| {
                 match sender.try_send(LanMsgEnum::NetMsg(sid, net_msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
@@ -101,7 +101,7 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_listen_service: TcpListenService<LanBufRw, LanNetMsg>;
+            let mut tcp_listen_service: TcpListenService<LanBufRw, Box<LanNetMsg>>;
             match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut err_msg_cb_fn)
             {
                 Ok(service) => tcp_listen_service = service,

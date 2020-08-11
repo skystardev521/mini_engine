@@ -2,10 +2,10 @@ use mini_socket::message::ErrMsg;
 
 pub enum WanMsgEnum {
     ErrMsg(u64, ErrMsg),
-    NetMsg(u64, Vec<u8>),
+    NetMsg(u64, Box<Vec<u8>>),
 }
 pub enum LanMsgEnum {
-    NetMsg(u64, LanNetMsg),
+    NetMsg(u64, Box<LanNetMsg>),
     ErrMsg(u64, LanErrMsg),
 }
 

@@ -1,14 +1,12 @@
 use crate::message::ErrMsg;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
-use crate::tcp_listen::TcpListen;
-use crate::tcp_listen_config::TcpListenConfig;
-use crate::tcp_socket_mgmt::TcpSocketMgmt;
-//use crate::tcp_socket_reader::ReadResult;
-//use crate::tcp_socket_writer::WriteResult;
 use crate::tcp_buf_rw::ReadResult;
 use crate::tcp_buf_rw::TcpBufRw;
 use crate::tcp_buf_rw::WriteResult;
+use crate::tcp_listen::TcpListen;
+use crate::tcp_listen_config::TcpListenConfig;
+use crate::tcp_socket_mgmt::TcpSocketMgmt;
 
 use libc;
 use log::{error, info, warn};
@@ -69,7 +67,7 @@ where
             config.msg_deque_max_len as usize,
         );
 
-        let vec_shared_size = config.socket_read_buffer as usize * 2;
+        let vec_shared_size = config.socket_read_buffer as usize * 3;
 
         Ok(TcpListenService {
             os_epoll,
@@ -123,28 +121,24 @@ where
     fn read_event(&mut self, sid: u64) {
         //info!("read id:{}", sid);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
-            loop {
-                match tcp_socket.read(&mut self.vec_shared) {
-                    ReadResult::Data(msg) => {
+            //loop {
+            match tcp_socket.read(&mut self.vec_shared) {
+                ReadResult::Data(vec_msg) => {
+                    for msg in vec_msg {
                         (self.net_msg_cb_fn)(sid, msg);
                     }
-                    ReadResult::BufferIsEmpty => {
-                        break;
+                }
+                ReadResult::Error(vec_msg, err) => {
+                    for msg in vec_msg {
+                        (self.net_msg_cb_fn)(sid, msg);
                     }
-                    ReadResult::ReadZeroSize => {
-                        self.del_tcp_socket(sid);
-                        (self.err_msg_cb_fn)(sid, ErrMsg::SocketClose);
-                        warn!("tcp_socket.reader.read id:{} Read Zero Size", sid);
-                        break;
-                    }
-                    ReadResult::Error(err) => {
-                        self.del_tcp_socket(sid);
-                        (self.err_msg_cb_fn)(sid, ErrMsg::SocketClose);
-                        error!("tcp_socket.reader.read id:{} err:{}", sid, err);
-                        break;
-                    }
+                    self.del_tcp_socket(sid);
+                    (self.err_msg_cb_fn)(sid, ErrMsg::SocketClose);
+                    error!("tcp_socket.reader.read id:{} err:{}", sid, err);
+                    //break;
                 }
             }
+        //}
         } else {
             warn!("read_event tcp_socket_mgmt id no exitis:{}", sid);
         };

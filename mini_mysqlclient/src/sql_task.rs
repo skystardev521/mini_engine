@@ -8,7 +8,7 @@ pub enum SqlTaskEnum {
 pub struct SqlTask<RT> {
     /// 数据库Id
     pub sql_str: String,
-    /// database_host_port
+    /// db_host_port
     pub database: String,
     pub result: Result<RT, String>,
     pub callback: Box<dyn FnMut(Result<RT, String>) + Send>,

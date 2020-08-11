@@ -72,7 +72,7 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, net_msg: NetMsg| {
+            let mut net_msg_cb_fn = |sid: u64, net_msg: Box<NetMsg>| {
                 match sender.try_send(MsgEnum::NetMsg(sid, net_msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
@@ -96,7 +96,7 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_connect_service: TcpConnectService<NetBufRw, NetMsg>;
+            let mut tcp_connect_service: TcpConnectService<NetBufRw, Box<NetMsg>>;
             match TcpConnectService::new(
                 vec_tcp_connect_config,
                 &mut net_msg_cb_fn,

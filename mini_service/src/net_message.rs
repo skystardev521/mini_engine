@@ -1,7 +1,7 @@
 use mini_socket::message::ErrMsg;
 pub enum MsgEnum {
     ErrMsg(u64, ErrMsg),
-    NetMsg(u64, NetMsg),
+    NetMsg(u64, Box<NetMsg>),
 }
 
 pub struct NetMsg {

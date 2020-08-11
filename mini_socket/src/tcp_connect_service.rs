@@ -4,6 +4,7 @@ use crate::os_socket;
 use crate::tcp_buf_rw::ReadResult;
 use crate::tcp_buf_rw::TcpBufRw;
 use crate::tcp_buf_rw::WriteResult;
+
 use crate::tcp_connect::TcpConnect;
 use crate::tcp_connect_config::TcpConnectConfig;
 use libc;
@@ -54,7 +55,7 @@ where
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
         let tcp_connect_num = vec_tcp_connect_config.len();
-        let vec_shared_size = get_max_socket_read_buffer(&vec_tcp_connect_config) * 2;
+        let vec_shared_size = get_max_socket_read_buffer(&vec_tcp_connect_config) * 3;
         let vec_tcp_connect = init_tcp_connect::<TBRW, MSG>(&os_epoll, vec_tcp_connect_config);
 
         Ok(TcpConnectService {
@@ -121,35 +122,27 @@ where
         //info!("read id:{}", id);
         if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(sid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
-                loop {
-                    match tcp_socket.read(&mut self.vec_shared) {
-                        ReadResult::Data(msg) => {
+                //loop {
+                match tcp_socket.read(&mut self.vec_shared) {
+                    ReadResult::Data(vec_msg) => {
+                        for msg in vec_msg {
                             (self.net_msg_cb_fn)(sid, msg);
                         }
-                        ReadResult::BufferIsEmpty => {
-                            break;
+                    }
+                    ReadResult::Error(vec_msg, err) => {
+                        for msg in vec_msg {
+                            (self.net_msg_cb_fn)(sid, msg);
                         }
-                        ReadResult::ReadZeroSize => {
-                            warn!("tcp_socket.reader.read :{}", "Read Zero Size");
-                            epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
-                            tcp_connect.set_tcp_socket_opt(tcp_reconnect::<TBRW, MSG>(
-                                &self.os_epoll,
-                                &tcp_connect,
-                            ));
-                            break;
-                        }
-                        ReadResult::Error(err) => {
-                            error!("tcp_socket.reader.read id:{} err:{}", sid, err);
-                            epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
-                            tcp_connect.set_tcp_socket_opt(tcp_reconnect::<TBRW, MSG>(
-                                &self.os_epoll,
-                                &tcp_connect,
-                            ));
-                            break;
-                        }
+                        error!("tcp_socket.read id:{} err:{}", sid, err);
+                        epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
+                        tcp_connect.set_tcp_socket_opt(tcp_reconnect::<TBRW, MSG>(
+                            &self.os_epoll,
+                            &tcp_connect,
+                        ));
                     }
                 }
             }
+        //}
         } else {
             warn!("read_event tcp_connect_mgmt id no exitis:{}", sid);
         };

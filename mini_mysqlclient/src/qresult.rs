@@ -26,44 +26,45 @@ impl<MysqlResult> QueryResult<MysqlResult> {
     pub fn fetch_row(&self) -> MysqlRow {
         unsafe { ffi::mysql_fetch_row(self.0 as *mut ffi::MYSQL_RES) }
     }
+    /// 结果集的列  field.name
     #[inline]
     #[allow(dead_code)]
-    /// 结果集的列  field.name
     pub fn fetch_field(&self) -> MysqlField {
         unsafe { ffi::mysql_fetch_field(self.0 as *mut ffi::MYSQL_RES) }
     }
 
+    /// 结果集的列数组  field[0].name
     #[inline]
     #[allow(dead_code)]
-    /// 结果集的列数组  field[0].name
     pub fn fetch_fields(&self) -> MysqlField {
         unsafe { ffi::mysql_fetch_fields(self.0 as *mut ffi::MYSQL_RES) }
     }
 
+    /// 行的数量
     #[inline]
-    /// 字段的数量
     pub fn num_rows(&self) -> u64 {
         unsafe { ffi::mysql_num_rows(self.0 as *mut ffi::MYSQL_RES) as u64 }
     }
-    /// 结果的字段数量
+    /// 字段数量
+    #[inline]
     pub fn num_fields(&self) -> u32 {
         unsafe { ffi::mysql_num_fields(self.0 as *mut ffi::MYSQL_RES) as u32 }
     }
 
-    #[inline]
     /// 字段值的长度数组
+    #[inline]
     pub fn fetch_lengths(&self) -> *mut u64 {
         unsafe { ffi::mysql_fetch_lengths(self.0 as *mut ffi::MYSQL_RES) as *mut u64 }
     }
 }
 
-pub trait CellValue<T> {
-    fn parse_value(&self, ptr: *const i8, size: usize) -> T;
+pub trait TableCellData<T> {
+    fn data(&self, ptr: *const i8, size: u64) -> T;
 }
 
-impl CellValue<i8> for i8 {
+impl TableCellData<i8> for i8 {
     #[inline]
-    fn parse_value(&self, ptr: *const i8, size: usize) -> i8 {
+    fn data(&self, ptr: *const i8, size: u64) -> i8 {
         if ptr.is_null() || size == 0 {
             return *self;
         }
@@ -71,16 +72,16 @@ impl CellValue<i8> for i8 {
         match cs.parse::<i8>() {
             Ok(val) => val,
             Err(err) => {
-                error!("mysql data->i32 err:{}", err);
+                error!("mysql data->i8 err:{}", err);
                 *self
             }
         }
     }
 }
 
-impl CellValue<i16> for i16 {
+impl TableCellData<i16> for i16 {
     #[inline]
-    fn parse_value(&self, ptr: *const i8, size: usize) -> i16 {
+    fn data(&self, ptr: *const i8, size: u64) -> i16 {
         if ptr.is_null() || size == 0 {
             return *self;
         }
@@ -88,16 +89,16 @@ impl CellValue<i16> for i16 {
         match cs.parse::<i16>() {
             Ok(val) => val,
             Err(err) => {
-                error!("mysql data->i32 err:{}", err);
+                error!("mysql data->i16 err:{}", err);
                 *self
             }
         }
     }
 }
 
-impl CellValue<i32> for i32 {
+impl TableCellData<i32> for i32 {
     #[inline]
-    fn parse_value(&self, ptr: *const i8, size: usize) -> i32 {
+    fn data(&self, ptr: *const i8, size: u64) -> i32 {
         if ptr.is_null() || size == 0 {
             return *self;
         }
@@ -112,9 +113,9 @@ impl CellValue<i32> for i32 {
     }
 }
 
-impl CellValue<f64> for f64 {
+impl TableCellData<f64> for f64 {
     #[inline]
-    fn parse_value(&self, ptr: *const i8, size: usize) -> f64 {
+    fn data(&self, ptr: *const i8, size: u64) -> f64 {
         if ptr.is_null() || size == 0 {
             return *self;
         }
@@ -129,20 +130,20 @@ impl CellValue<f64> for f64 {
     }
 }
 
-impl CellValue<Vec<i8>> for Vec<i8> {
+impl TableCellData<Vec<i8>> for Vec<i8> {
     #[inline]
-    fn parse_value(&self, ptr: *const i8, size: usize) -> Vec<i8> {
+    fn data(&self, ptr: *const i8, size: u64) -> Vec<i8> {
         if ptr.is_null() || size == 0 {
             self.to_vec()
         } else {
-            c_str_to_vec(ptr, size)
+            c_str_to_vec(ptr, size as usize)
         }
     }
 }
 
-impl CellValue<String> for String {
+impl TableCellData<String> for String {
     #[inline]
-    fn parse_value(&self, ptr: *const i8, size: usize) -> String {
+    fn data(&self, ptr: *const i8, size: u64) -> String {
         if ptr.is_null() || size == 0 {
             return self.to_string();
         } else {
@@ -164,7 +165,7 @@ fn c_str_to_vec(ptr: *const i8, size: usize) -> Vec<i8> {
 
 //#[feature(trace_macros)]
 //trace_macros!(true);
-
+/// todo 可以设计成用enum 代码类型
 #[macro_export]
 macro_rules! query_result {
     ( $query_result:expr, $( $defaults:expr ),+ ) => {
@@ -181,8 +182,8 @@ macro_rules! query_result {
                     if row_data.is_null() { break; }
 
                     let fetch_lengths = $query_result.fetch_lengths() as *const u64;
-                    let row_data_slice = ptr::slice_from_raw_parts(row_data, num_fields as usize);
-                    let data_size_slice = ptr::slice_from_raw_parts(fetch_lengths, num_fields as usize);
+                    let row_data_slice = ptr::slice_from_raw_parts(row_data, num_fields);
+                    let data_size_slice = ptr::slice_from_raw_parts(fetch_lengths, num_fields);
 
                     let mut _field: usize = 0;
                     let row_data_array = unsafe { &*row_data_slice };
@@ -197,7 +198,7 @@ macro_rules! query_result {
                                 }else {
                                     let data = row_data_array[_field];
                                     let data_size = data_size_array[_field]; _field += 1;
-                                    CellValue::parse_value(&$defaults, data, data_size as usize)
+                                    TableCellData::data(&$defaults, data, data_size)
                                 }
                             },
                         )+

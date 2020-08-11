@@ -6,12 +6,12 @@ pub enum WriteResult {
     Error(String),
 }
 
+
 pub enum ReadResult<MSG> {
-    Data(MSG),
-    Error(String),
-    ReadZeroSize,
-    BufferIsEmpty,
+    Data(Vec<MSG>),
+    Error(Vec<MSG>, String),
 }
+
 
 pub trait TcpBufRw<MSG> {
     /// 网络数据包体 最大字节数
@@ -22,5 +22,5 @@ pub trait TcpBufRw<MSG> {
 
     /// 从tcp buffer中读取数据
     /// vec_shared: 共享缓冲区
-    fn read(&mut self, socket: &mut TcpStream, vec_shared: &mut Vec<u8>) -> ReadResult<MSG>;
+    fn read(&mut self, socket: &mut TcpStream, vec_shared: &mut Vec<u8>) ->ReadResult<MSG>;
 }
