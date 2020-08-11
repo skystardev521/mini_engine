@@ -31,7 +31,7 @@ pub struct TcpListenService<'a, TBRW, MSG> {
     config: &'a TcpListenConfig,
     tcp_socket_mgmt: TcpSocketMgmt<MSG>,
     vec_epoll_event: Vec<libc::epoll_event>,
-    net_msg_cb_fn: &'a mut dyn Fn(u64, MSG),
+    net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
     err_msg_cb_fn: &'a mut dyn Fn(u64, ErrMsg),
 }
 
@@ -51,7 +51,7 @@ where
 {
     pub fn new(
         config: &'a TcpListenConfig,
-        net_msg_cb_fn: &'a mut dyn Fn(u64, MSG),
+        net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
         err_msg_cb_fn: &'a mut dyn Fn(u64, ErrMsg),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
@@ -121,24 +121,17 @@ where
     fn read_event(&mut self, sid: u64) {
         //info!("read id:{}", sid);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
-            //loop {
             match tcp_socket.read(&mut self.vec_shared) {
                 ReadResult::Data(vec_msg) => {
-                    for msg in vec_msg {
-                        (self.net_msg_cb_fn)(sid, msg);
-                    }
+                    (self.net_msg_cb_fn)(sid, vec_msg);
                 }
                 ReadResult::Error(vec_msg, err) => {
-                    for msg in vec_msg {
-                        (self.net_msg_cb_fn)(sid, msg);
-                    }
                     self.del_tcp_socket(sid);
+                    (self.net_msg_cb_fn)(sid, vec_msg);
                     (self.err_msg_cb_fn)(sid, ErrMsg::SocketClose);
                     error!("tcp_socket.reader.read id:{} err:{}", sid, err);
-                    //break;
                 }
             }
-        //}
         } else {
             warn!("read_event tcp_socket_mgmt id no exitis:{}", sid);
         };

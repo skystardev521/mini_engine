@@ -72,23 +72,25 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<LanMsgEnum>, sender: SyncSender<LanMsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, net_msg: Box<LanNetMsg>| {
-                match sender.try_send(LanMsgEnum::NetMsg(sid, net_msg)) {
-                    Ok(_) => {}
-                    Err(TrySendError::Full(_)) => {
-                        error!("LanService try_send Full");
-                    }
-                    Err(TrySendError::Disconnected(_)) => {
-                        error!("LanService try_send Disconnected");
-                    }
-                };
+            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<LanNetMsg>| {
+                for msg in vec_msg {
+                    match sender.try_send(LanMsgEnum::NetMsg(sid, msg)) {
+                        Ok(_) => {}
+                        Err(TrySendError::Full(_)) => {
+                            error!("LanService try_send Full");
+                        }
+                        Err(TrySendError::Disconnected(_)) => {
+                            error!("LanService try_send Disconnected");
+                        }
+                    };
+                }
             };
-            let mut err_msg_cb_fn = |sid: u64, err_msg: ErrMsg| {
+            let mut err_msg_cb_fn = |sid: u64, msg: ErrMsg| {
                 match sender.try_send(LanMsgEnum::ErrMsg(
                     sid,
                     LanErrMsg {
                         sid: sid,
-                        data: err_msg,
+                        data: msg,
                     },
                 )) {
                     Ok(_) => {}
@@ -101,10 +103,12 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_listen_service: TcpListenService<LanBufRw, Box<LanNetMsg>>;
+            let mut tcp_listen_service: TcpListenService<LanBufRw, LanNetMsg>;
             match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut err_msg_cb_fn)
             {
-                Ok(service) => tcp_listen_service = service,
+                Ok(service) => {
+                    tcp_listen_service = service;
+                }
                 Err(err) => {
                     error!("TcpListenService::new error:{}", err);
                     return;

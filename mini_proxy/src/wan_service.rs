@@ -70,19 +70,21 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<WanMsgEnum>, sender: SyncSender<WanMsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, net_msg: Box<Vec<u8>>| {
-                match sender.try_send(WanMsgEnum::NetMsg(sid, net_msg)) {
-                    Ok(_) => {}
-                    Err(TrySendError::Full(_)) => {
-                        error!("WanService try_send Full");
-                    }
-                    Err(TrySendError::Disconnected(_)) => {
-                        error!("WanService try_send Disconnected");
-                    }
-                };
+            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<Vec<u8>>| {
+                for msg in vec_msg {
+                    match sender.try_send(WanMsgEnum::NetMsg(sid, msg)) {
+                        Ok(_) => {}
+                        Err(TrySendError::Full(_)) => {
+                            error!("WanService try_send Full");
+                        }
+                        Err(TrySendError::Disconnected(_)) => {
+                            error!("WanService try_send Disconnected");
+                        }
+                    };
+                }
             };
-            let mut err_msg_cb_fn = |sid: u64, err_msg: ErrMsg| {
-                match sender.try_send(WanMsgEnum::ErrMsg(sid, err_msg)) {
+            let mut err_msg_cb_fn = |sid: u64, msg: ErrMsg| {
+                match sender.try_send(WanMsgEnum::ErrMsg(sid, msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("WanService try_send Full");
@@ -93,7 +95,7 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_listen_service: TcpListenService<WanBufRw, Box<Vec<u8>>>;
+            let mut tcp_listen_service: TcpListenService<WanBufRw, Vec<u8>>;
             match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut err_msg_cb_fn)
             {
                 Ok(service) => tcp_listen_service = service,
@@ -139,9 +141,9 @@ fn worker_closure(
                 //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(WanMsgEnum::NetMsg(sid, net_msg)) => {
+                        Ok(WanMsgEnum::NetMsg(sid, msg)) => {
                             //这里要优化 判断是否广播消息
-                            tcp_listen_service.write_net_msg(sid, net_msg);
+                            tcp_listen_service.write_net_msg(sid, msg);
                             /*
                             single_write_msg_count += 1;
                             if single_write_msg_count == single_write_msg_max_num {
@@ -149,8 +151,8 @@ fn worker_closure(
                             }
                             */
                         }
-                        Ok(WanMsgEnum::ErrMsg(sid, err_msg)) => {
-                            if err_msg == ErrMsg::CloseSocket {
+                        Ok(WanMsgEnum::ErrMsg(sid, msg)) => {
+                            if msg == ErrMsg::CloseSocket {
                                 tcp_listen_service.del_tcp_socket(sid);
                             }
                         }

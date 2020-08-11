@@ -30,7 +30,7 @@ pub struct BufReader {
     /// 0:no data
     head_pos: usize,
 
-    vec_data: Box<Vec<u8>>,
+    vec_data: Vec<u8>,
     head_data: [u8; MSG_HEAD_SIZE],
 }
 
@@ -39,7 +39,7 @@ pub struct BufWriter {
     next_id: u16,
     vec_pos: usize,
     head_pos: usize,
-    vec_data: Box<Vec<u8>>,
+    vec_data: Vec<u8>,
     head_data: [u8; MSG_HEAD_SIZE],
 }
 
@@ -51,28 +51,28 @@ impl Default for WanBufRw {
                 next_id: 0,
                 vec_pos: 0,
                 head_pos: 0,
-                vec_data: Box::new(vec![]),
+                vec_data: vec![],
                 head_data: [0u8; MSG_HEAD_SIZE],
             },
             buf_writer: BufWriter {
                 next_id: 0,
                 vec_pos: 0,
                 head_pos: 0,
-                vec_data: Box::new(vec![]),
+                vec_data: vec![],
                 head_data: [0u8; MSG_HEAD_SIZE],
             },
         }
     }
 }
 
-impl TcpBufRw<Box<Vec<u8>>> for WanBufRw {
+impl TcpBufRw<Vec<u8>> for WanBufRw {
     /// 网络数据包体 最大字节数
     fn set_msg_max_size(&mut self, msg_max_size: usize) {
         self.msg_max_size = msg_max_size;
     }
 
     /// 把数据写到tcp buffer中
-    fn write(&mut self, socket: &mut TcpStream, data: &Box<Vec<u8>>) -> WriteResult {
+    fn write(&mut self, socket: &mut TcpStream, data: &Vec<u8>) -> WriteResult {
         if self.msg_max_size < data.len() {
             return WriteResult::Error("msg byte size error".into());
         }
@@ -81,22 +81,10 @@ impl TcpBufRw<Box<Vec<u8>>> for WanBufRw {
 
     /// 从tcp buffer中读取数据
     /// vec_shared: 共享缓冲区
-    fn read(
-        &mut self,
-        socket: &mut TcpStream,
-        vec_shared: &mut Vec<u8>,
-    ) -> ReadResult<Box<Vec<u8>>> {
-        ReadResult::Data(vec![])
+    fn read(&mut self, socket: &mut TcpStream, vec_shared: &mut Vec<u8>) -> ReadResult<Vec<u8>> {
+        //ReadResult::Data(vec![])
 
-        //let vec = Vec::new();
-        //vec.push(Box::new(vec![0u8; 0]))
-
-        //ReadResult::Data(Vec::new().push(Box::new(vec![])))
-
-        //ReadResult::Data(vec![Box::new(vec![]); 0])
-        /*
         let mut in_pos = 0;
-        let mut result: ReadResult<Vec<u8>>;
         loop {
             match socket.read(&mut vec_shared[in_pos..]) {
                 Ok(size) => {
@@ -106,27 +94,28 @@ impl TcpBufRw<Box<Vec<u8>>> for WanBufRw {
                             break;
                         }
                     } else {
-                        result = ReadResult::Error("disconnect".into());
-                        break;
+
+                        return ReadResult::Error(vec![], "disconnect".into());
                     }
                 }
                 Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
-                    result = ReadResult::BufferIsEmpty;
-                    break;
-                }
-                Err(ref err) => {
-                    result = ReadResult::Error(err.to_string());
+                    //result = ReadResult::BufferIsEmpty;
                     break;
                 }
                 Err(ref err) if err.kind() == ErrorKind::Interrupted => {
                     continue; ////系统中断 再read一次
                 }
+                Err(ref err) => {
+
+                    return ReadResult::Error(vec![], err.to_string());
+                }
             }
         }
-
         self.buf_reader
             .split_pack(self.msg_max_size, vec_shared, 0, in_pos);
-            */
+
+        ReadResult::Data(vec![])
+
     }
 }
 
@@ -137,8 +126,9 @@ impl BufReader {
         vec: &mut Vec<u8>,
         out_pos: usize,
         in_pos: usize,
-    ) {
+    )->ReadResult<Vec<u8>> {
         let mut split_pos = out_pos;
+
         // bufReader中没有数据
         if self.head_pos == 0 {
             //不够包头长度
@@ -151,18 +141,18 @@ impl BufReader {
                         in_pos,
                     );
                 }
-                return;
+                return ReadResult::Data(vec![]);
             }
 
             match self.split_head(vec, out_pos, msg_max_size) {
                 Ok(msize) => {
                     self.head_pos = MSG_HEAD_SIZE;
-                    self.vec_data = Box::new(vec![0u8; msize]);
+                    self.vec_data = vec![0u8; msize];
                     let len = in_pos - (split_pos + MSG_HEAD_SIZE);
                     self.vec_pos = len;
 
                     if len == 0 {
-                        return;
+                        return ReadResult::Data(vec![]);
                     }
 
                     if len < msize {
@@ -184,10 +174,12 @@ impl BufReader {
                     }
                 }
                 Err(err) => {
-                    return;
+                    return ReadResult::Error(vec![], err);
                 }
             }
         }
+
+        ReadResult::Data(vec![])
     }
 
     fn split_head(
