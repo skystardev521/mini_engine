@@ -12,12 +12,12 @@ trait Hello {
 }
 
 struct TestHello {
-    v: u16
+    v: u16,
 }
 
 impl Default for TestHello {
     fn default() -> Self {
-        TestHello {v:123}
+        TestHello { v: 123 }
     }
 }
 
@@ -27,9 +27,7 @@ impl Hello for TestHello {
     }
 }
 
-impl TestHello {
-    
-}
+impl TestHello {}
 
 struct TestTrait<T> {
     hello: Box<T>,

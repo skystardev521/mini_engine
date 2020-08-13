@@ -1,4 +1,4 @@
-use crate::message::ErrMsg;
+use crate::msg_kind::MsgKind;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
 use crate::tcp_buf_rw::ReadResult;
@@ -25,13 +25,13 @@ const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
 pub struct TcpConnectService<'a, TBRW, MSG> {
     os_epoll: OSEpoll,
-    vec_shared: Vec<u8>,
+    vec_share: Vec<u8>,
     epoll_max_events: u16,
     phantom: PhantomData<TBRW>,
     vec_tcp_connect: Vec<TcpConnect<MSG>>,
     vec_epoll_event: Vec<libc::epoll_event>,
-    net_msg_cb_fn: &'a mut dyn Fn(u64, MSG),
-    err_msg_cb_fn: &'a mut dyn Fn(u64, ErrMsg),
+    net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
+    msg_kind_cb_fn: &'a mut dyn Fn(u64, MsgKind),
 }
 
 impl<'a, TBRW, MSG> Drop for TcpConnectService<'a, TBRW, MSG> {
@@ -50,21 +50,21 @@ where
 {
     pub fn new(
         vec_tcp_connect_config: Vec<TcpConnectConfig>,
-        net_msg_cb_fn: &'a mut dyn Fn(u64, MSG),
-        err_msg_cb_fn: &'a mut dyn Fn(u64, ErrMsg),
+        net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
+        msg_kind_cb_fn: &'a mut dyn Fn(u64, MsgKind),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
         let tcp_connect_num = vec_tcp_connect_config.len();
-        let vec_shared_size = get_max_socket_read_buffer(&vec_tcp_connect_config) * 3;
+        let vec_share_size = get_max_socket_read_buffer(&vec_tcp_connect_config) * 3;
         let vec_tcp_connect = init_tcp_connect::<TBRW, MSG>(&os_epoll, vec_tcp_connect_config);
 
         Ok(TcpConnectService {
             os_epoll,
             net_msg_cb_fn,
-            err_msg_cb_fn,
+            msg_kind_cb_fn,
             vec_tcp_connect,
             phantom: PhantomData,
-            vec_shared: vec![0u8; vec_shared_size],
+            vec_share: vec![0u8; vec_share_size],
             epoll_max_events: tcp_connect_num as u16,
             vec_epoll_event: vec![libc::epoll_event { events: 0, u64: 0 }; tcp_connect_num],
         })
@@ -123,16 +123,12 @@ where
         if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(sid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 //loop {
-                match tcp_socket.read(&mut self.vec_shared) {
+                match tcp_socket.read(&mut self.vec_share) {
                     ReadResult::Data(vec_msg) => {
-                        for msg in vec_msg {
-                            (self.net_msg_cb_fn)(sid, msg);
-                        }
+                        (self.net_msg_cb_fn)(sid, vec_msg);
                     }
                     ReadResult::Error(vec_msg, err) => {
-                        for msg in vec_msg {
-                            (self.net_msg_cb_fn)(sid, msg);
-                        }
+                        (self.net_msg_cb_fn)(sid, vec_msg);
                         error!("tcp_socket.read id:{} err:{}", sid, err);
                         epoll_del_fd(&self.os_epoll, sid, tcp_socket.socket.as_raw_fd());
                         tcp_connect.set_tcp_socket_opt(tcp_reconnect::<TBRW, MSG>(
@@ -156,7 +152,7 @@ where
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                     if tcp_socket.vec_queue_len() > msg_deque_max_len {
                         warn!("sid:{} Msg Queue Is Full", sid);
-                        (self.err_msg_cb_fn)(sid, ErrMsg::MsgQueueIsFull);
+                        (self.msg_kind_cb_fn)(sid, MsgKind::MsgQueueIsFull);
                         return;
                     }
 
@@ -176,7 +172,7 @@ where
             }
             None => {
                 warn!("write_net_msg socket id no exitis:{}", sid);
-                (self.err_msg_cb_fn)(sid, ErrMsg::SocketIdNotExist);
+                (self.msg_kind_cb_fn)(sid, MsgKind::SocketIdNotExist);
             }
         }
     }

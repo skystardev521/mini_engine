@@ -18,13 +18,13 @@ impl TcpBufRw<LanNetMsg> for LanBufRw {
     fn set_msg_max_size(&mut self, msg_max_size: usize) {}
 
     /// 把数据写到tcp buffer中
-    fn write(&mut self, socket: &mut TcpStream, data: &LanNetMsg) -> WriteResult {
+    fn write(&mut self, socket: &mut TcpStream, data: &mut LanNetMsg) -> WriteResult {
         WriteResult::Finish
     }
 
     /// 从tcp buffer中读取数据
-    /// vec_shared: 共享缓冲区
-    fn read(&mut self, socket: &mut TcpStream, vec_shared: &mut Vec<u8>) -> ReadResult<LanNetMsg> {
+    /// vec_share: 共享缓冲区
+    fn read(&mut self, socket: &mut TcpStream, vec_share: &mut Vec<u8>) -> ReadResult<LanNetMsg> {
         ReadResult::Data(vec![])
     }
 }

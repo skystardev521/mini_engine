@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
-use crate::net_message::LanErrMsg;
 use crate::net_message::LanMsgEnum;
+use crate::net_message::LanMsgKind;
 use crate::net_message::LanNetMsg;
 use crate::net_message::WanMsgEnum;
 use crate::wan_service::WanService;
@@ -71,25 +71,13 @@ impl Service {
                 }
                 //要把tcp_socket id  转 用户id
                 Some(WanMsgEnum::NetMsg(sid, msg)) => {
-                    self.sender_lan(LanMsgEnum::NetMsg(
-                        sid,
-                        LanNetMsg {
-                            sid: sid,
-                            data: msg,
-                        },
-                    ));
+                    self.sender_lan(LanMsgEnum::NetMsg(sid, LanNetMsg { sid: sid, msg: msg }));
                     //self.sender_wan(msg);
                 }
 
                 //要把tcp_socket id  转 用户id
-                Some(WanMsgEnum::ErrMsg(sid, msg)) => {
-                    self.sender_lan(LanMsgEnum::ErrMsg(
-                        sid,
-                        LanErrMsg {
-                            sid: sid,
-                            data: msg,
-                        },
-                    ));
+                Some(WanMsgEnum::MsgKind(sid, kind)) => {
+                    self.sender_lan(LanMsgEnum::MsgKind(sid, LanMsgKind { sid, kind }));
                     //self.sender_wan(msg);
                 }
             }
@@ -107,16 +95,16 @@ impl Service {
             match self.lan_service.receiver() {
                 None => return true,
                 //要把 用户id 转 tcp_socket id
-                Some(LanMsgEnum::NetMsg(sid, msg)) => {
-                    self.sender_wan(WanMsgEnum::NetMsg(msg.sid, msg.data));
+                Some(LanMsgEnum::NetMsg(sid, net_msg)) => {
+                    self.sender_wan(WanMsgEnum::NetMsg(net_msg.sid, net_msg.msg));
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;
                     }
                 }
                 //要把 用户id 转 tcp_socket id
-                Some(LanMsgEnum::ErrMsg(sid, msg)) => {
-                    self.sender_wan(WanMsgEnum::ErrMsg(msg.sid, msg.data));
+                Some(LanMsgEnum::MsgKind(sid, msg_kind)) => {
+                    self.sender_wan(WanMsgEnum::MsgKind(msg_kind.sid, msg_kind.kind));
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;

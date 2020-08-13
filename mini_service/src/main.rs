@@ -16,7 +16,7 @@ fn main() {
         return;
     }
 
-    let mut open_log_file_ts = time::timestamp();
+    let mut log_file_timestamp = time::timestamp();
     match Logger::init(
         &String::from("info"),
         &String::from("logs/mini_service.log"),
@@ -38,9 +38,9 @@ fn main() {
     loop {
         thread::sleep(Duration::from_secs(60));
 
-        if open_log_file_ts + LOG_FILE_DURATION < time::timestamp() {
+        if log_file_timestamp + LOG_FILE_DURATION < time::timestamp() {
             log::logger().flush();
-            open_log_file_ts = time::timestamp();
+            log_file_timestamp = time::timestamp();
         }
     }
 }

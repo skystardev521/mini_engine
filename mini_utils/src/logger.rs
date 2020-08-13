@@ -9,17 +9,18 @@ use std::sync::Mutex;
 
 const HOUR_8: u64 = 8 * 60 * 60 * 1000;
 
+//std::io::BufWriter 可能 能优化一下性能
 pub struct Logger /*<W: Write + Send + 'static>*/ {
-    file_path: String,
+    str_path: String,
     level: log::Level,
     file: Mutex<File>,
 }
 
 #[inline]
-fn new_file_path(file_path: &String, time: &time::Time) -> String {
+fn new_file_path(str_path: &String, time: &time::Time) -> String {
     format!(
         "{}_{}-{:0>2}-{:0>2}_{:0>2}-{:0>2}-{:0>2}",
-        file_path,
+        str_path,
         time.year,
         time.month + 1,
         time.day,
@@ -59,17 +60,17 @@ fn fmt_log(record: &log::Record, time: &time::Time) -> String {
 
 impl Logger /*<W>*/ {
     //new_file_interval:单位小时
-    pub fn init(level: &String, file_path: &String) -> Result<(), String> {
+    pub fn init(level: &String, str_path: &String) -> Result<(), String> {
         let log_level = match level.to_uppercase().as_str() {
             "TRACE" => log::Level::Trace,
             "DEBUG" => log::Level::Debug,
             "INFO" => log::Level::Info,
             "WARN" => log::Level::Warn,
             "ERROR" => log::Level::Error,
-            _ => log::Level::Error,
+            __ => log::Level::Error,
         };
 
-        let path = Path::new(&file_path);
+        let path = Path::new(&str_path);
         if let Some(dir) = path.parent() {
             match fs::create_dir_all(&dir) {
                 Ok(()) => (),
@@ -79,13 +80,13 @@ impl Logger /*<W>*/ {
         match OpenOptions::new()
             .append(true)
             .create(true)
-            .open(&file_path)
+            .open(&str_path)
         {
             Ok(file) => {
                 let logger = Box::new(Logger {
                     level: log_level,
                     file: Mutex::new(file),
-                    file_path: file_path.clone(),
+                    str_path: str_path.clone(),
                 });
 
                 match log::set_boxed_logger(logger) {
@@ -93,7 +94,7 @@ impl Logger /*<W>*/ {
                     Ok(()) => Ok(log::set_max_level(log_level.to_level_filter())),
                 }
             }
-            Err(err) => Err(format!("open:{} error:{}", &file_path, err)),
+            Err(ref err) => Err(format!("open:{} error:{}", &str_path, err)),
         }
     }
 }
@@ -112,13 +113,6 @@ impl log::Log for Logger /*<W>*/ {
             if let Err(_err) = file_lock.write(fmt_log(&record, &time).as_bytes()) {
                 return;
             }
-
-            /*
-            //可优化 定时flush
-            if let Err(_err) = file_lock.flush() {
-                return;
-            }
-            */
         }
     }
 
@@ -131,21 +125,21 @@ impl log::Log for Logger /*<W>*/ {
 
             let now_timestame = time::timestamp() + HOUR_8;
             let open_file_time = time::timestamp_to_time(now_timestame);
-            let new_file_path = new_file_path(&self.file_path, &open_file_time);
+            let new_file_path = new_file_path(&self.str_path, &open_file_time);
 
-            if let Err(_) = fs::rename(&self.file_path, &new_file_path) {
+            if let Err(_) = fs::rename(&self.str_path, &new_file_path) {
                 return;
             }
 
             match OpenOptions::new()
                 .append(true)
                 .create(true)
-                .open(&self.file_path)
+                .open(&self.str_path)
             {
                 Ok(file) => {
                     *file_lock = file;
                 }
-                Err(err) => println!("open file:{} error:{}", &self.file_path, err),
+                Err(err) => println!("open file:{} error:{}", &self.str_path, err),
             };
         }
     }

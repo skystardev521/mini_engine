@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::conn_service::ConnService;
 use crate::net_message::MsgEnum;
 use log::{error, warn};
-use mini_socket::message::ErrMsg;
+use mini_socket::msg_kind::MsgKind;
 use std::thread;
 use std::time::Duration;
 

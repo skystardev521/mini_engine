@@ -1,7 +1,7 @@
 use crate::net_buf_rw::NetBufRw;
 use crate::net_message::MsgEnum;
 use crate::net_message::NetMsg;
-use mini_socket::message::ErrMsg;
+use mini_socket::msg_kind::MsgKind;
 use mini_socket::tcp_connect_config::TcpConnectConfig;
 use mini_socket::tcp_connect_service::TcpConnectService;
 use mini_utils::worker_config::WorkerConfig;
@@ -72,20 +72,22 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, net_msg: Box<NetMsg>| {
-                match sender.try_send(MsgEnum::NetMsg(sid, net_msg)) {
-                    Ok(_) => {}
-                    Err(TrySendError::Full(_)) => {
-                        error!("TcpConnectService try_send Full");
-                    }
-                    Err(TrySendError::Disconnected(_)) => {
-                        error!("TcpConnectService try_send Disconnected");
-                    }
-                };
+            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<NetMsg>| {
+                for msg in vec_msg {
+                    match sender.try_send(MsgEnum::NetMsg(sid, msg)) {
+                        Ok(_) => {}
+                        Err(TrySendError::Full(_)) => {
+                            error!("TcpConnectService try_send Full");
+                        }
+                        Err(TrySendError::Disconnected(_)) => {
+                            error!("TcpConnectService try_send Disconnected");
+                        }
+                    };
+                }
             };
 
-            let mut err_msg_cb_fn = |sid: u64, err_msg: ErrMsg| {
-                match sender.try_send(MsgEnum::ErrMsg(sid, err_msg)) {
+            let mut msg_kind_cb_fn = |sid: u64, err_msg: MsgKind| {
+                match sender.try_send(MsgEnum::MsgKind(sid, err_msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("TcpConnectService try_send Full");
@@ -96,11 +98,11 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_connect_service: TcpConnectService<NetBufRw, Box<NetMsg>>;
+            let mut tcp_connect_service: TcpConnectService<NetBufRw, NetMsg>;
             match TcpConnectService::new(
                 vec_tcp_connect_config,
                 &mut net_msg_cb_fn,
-                &mut err_msg_cb_fn,
+                &mut msg_kind_cb_fn,
             ) {
                 Ok(service) => tcp_connect_service = service,
                 Err(err) => {
@@ -131,7 +133,7 @@ fn worker_closure(
                             //这里要优化 判断是否广播消息
                             tcp_connect_service.write_net_msg(sid, net_msg);
                         }
-                        Ok(MsgEnum::ErrMsg(_sid, _sys_msg)) => {}
+                        Ok(MsgEnum::MsgKind(_sid, _sys_msg)) => {}
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Disconnected) => {
                             error!("ConnService receiver.try_recv:Disconnected");

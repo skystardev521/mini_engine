@@ -1,5 +1,6 @@
 use std::net::TcpStream;
 
+#[derive(PartialEq)]
 pub enum WriteResult {
     Finish,
     BufferFull,
@@ -13,12 +14,12 @@ pub enum ReadResult<MSG> {
 
 pub trait TcpBufRw<MSG> {
     /// 网络数据包体 最大字节数
-    fn set_msg_max_size(&mut self, msg_max_size: usize);
+    fn set_msg_max_size(&mut self, max_size: usize);
 
     /// 把数据写到tcp buffer中
-    fn write(&mut self, socket: &mut TcpStream, data: &MSG) -> WriteResult;
+    fn write(&mut self, socket: &mut TcpStream, data: &mut MSG) -> WriteResult;
 
     /// 从tcp buffer中读取数据
-    /// vec_shared: 共享缓冲区
-    fn read(&mut self, socket: &mut TcpStream, vec_shared: &mut Vec<u8>) -> ReadResult<MSG>;
+    /// vec_share: 共享缓冲区
+    fn read(&mut self, socket: &mut TcpStream, vec_share: &mut Vec<u8>) -> ReadResult<MSG>;
 }

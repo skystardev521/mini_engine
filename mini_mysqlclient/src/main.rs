@@ -23,7 +23,7 @@ mod sql_task;
 mod workers;
 
 fn main() {
-    let mut _open_log_file_ts = time::timestamp();
+    let mut _log_file_timestamp = time::timestamp();
     match Logger::init(&String::from("info"), &String::from("logs/mysql.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),

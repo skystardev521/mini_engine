@@ -44,7 +44,7 @@ impl<MSG> TcpSocket<MSG> {
     /// 把数据写到tcp buffer中
     pub fn write(&mut self) -> WriteResult {
         let socket = &mut self.socket;
-        while let Some(msg) = self.vec_deque.front() {
+        while let Some(msg) = self.vec_deque.front_mut() {
             match self.tcp_buf_rw.write(socket, msg) {
                 WriteResult::Finish => {}
                 WriteResult::BufferFull => return WriteResult::BufferFull,
@@ -55,10 +55,10 @@ impl<MSG> TcpSocket<MSG> {
     }
 
     /// 从tcp buffer中读取数据
-    /// vec_shared: 共享缓冲区
+    /// vec_share: 共享缓冲区
     #[inline]
-    pub fn read(&mut self, vec_shared: &mut Vec<u8>) -> ReadResult<MSG> {
+    pub fn read(&mut self, vec_share: &mut Vec<u8>) -> ReadResult<MSG> {
         let socket = &mut self.socket;
-        self.tcp_buf_rw.read(socket, vec_shared)
+        self.tcp_buf_rw.read(socket, vec_share)
     }
 }

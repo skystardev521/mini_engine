@@ -27,7 +27,7 @@ fn main() {
         return;
     }
 
-    let mut open_log_timestamp = time::timestamp();
+    let mut log_file_timestamp = time::timestamp();
     match Logger::init(&String::from("info"), &String::from("logs/mini_proxy.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),
@@ -45,9 +45,9 @@ fn main() {
 
     loop {
         thread::sleep(Duration::from_secs(60));
-        if open_log_timestamp + LOG_FILE_DURATION < time::timestamp() {
+        if log_file_timestamp + LOG_FILE_DURATION < time::timestamp() {
             log::logger().flush();
-            open_log_timestamp = time::timestamp();
+            log_file_timestamp = time::timestamp();
         }
     }
 }

@@ -1,8 +1,8 @@
 use crate::lan_buf_rw::LanBufRw;
-use crate::net_message::LanErrMsg;
 use crate::net_message::LanMsgEnum;
+use crate::net_message::LanMsgKind;
 use crate::net_message::LanNetMsg;
-use mini_socket::message::ErrMsg;
+use mini_socket::msg_kind::MsgKind;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
 use mini_utils::worker_config::WorkerConfig;
@@ -85,14 +85,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut err_msg_cb_fn = |sid: u64, msg: ErrMsg| {
-                match sender.try_send(LanMsgEnum::ErrMsg(
-                    sid,
-                    LanErrMsg {
-                        sid: sid,
-                        data: msg,
-                    },
-                )) {
+            let mut msg_kind_cb_fn = |sid: u64, kind: MsgKind| {
+                match sender.try_send(LanMsgEnum::MsgKind(sid, LanMsgKind { sid, kind })) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("LanService try_send Full");
@@ -104,7 +98,7 @@ fn worker_closure(
             };
             //-----------------------------------------------------------------------------
             let mut tcp_listen_service: TcpListenService<LanBufRw, LanNetMsg>;
-            match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut err_msg_cb_fn)
+            match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut msg_kind_cb_fn)
             {
                 Ok(service) => {
                     tcp_listen_service = service;
@@ -139,7 +133,7 @@ fn worker_closure(
                             //这里要优化 判断是否广播消息
                             tcp_listen_service.write_net_msg(sid, net_msg);
                         }
-                        Ok(LanMsgEnum::ErrMsg(_sid, _err_msg)) => {}
+                        Ok(LanMsgEnum::MsgKind(_sid, _err_msg)) => {}
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Disconnected) => {
                             error!("LanService receiver.try_recv:Disconnected");

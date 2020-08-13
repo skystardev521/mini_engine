@@ -1,10 +1,10 @@
-use mini_socket::message::ErrMsg;
+use mini_socket::msg_kind::MsgKind;
 pub enum MsgEnum {
-    ErrMsg(u64, ErrMsg),
-    NetMsg(u64, Box<NetMsg>),
+    NetMsg(u64, NetMsg),
+    MsgKind(u64, MsgKind),
 }
 
 pub struct NetMsg {
     pub sid: u64,
-    pub data: Vec<u8>,
+    pub msg: Vec<u8>,
 }

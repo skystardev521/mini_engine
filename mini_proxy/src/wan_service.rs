@@ -1,6 +1,6 @@
 use crate::net_message::WanMsgEnum;
 use crate::wan_buf_rw::WanBufRw;
-use mini_socket::message::ErrMsg;
+use mini_socket::msg_kind::MsgKind;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
 use mini_utils::worker_config::WorkerConfig;
@@ -83,8 +83,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut err_msg_cb_fn = |sid: u64, msg: ErrMsg| {
-                match sender.try_send(WanMsgEnum::ErrMsg(sid, msg)) {
+            let mut msg_kind_cb_fn = |sid: u64, msg: MsgKind| {
+                match sender.try_send(WanMsgEnum::MsgKind(sid, msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("WanService try_send Full");
@@ -96,7 +96,7 @@ fn worker_closure(
             };
             //-----------------------------------------------------------------------------
             let mut tcp_listen_service: TcpListenService<WanBufRw, Vec<u8>>;
-            match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut err_msg_cb_fn)
+            match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut msg_kind_cb_fn)
             {
                 Ok(service) => tcp_listen_service = service,
                 Err(err) => {
@@ -151,8 +151,8 @@ fn worker_closure(
                             }
                             */
                         }
-                        Ok(WanMsgEnum::ErrMsg(sid, msg)) => {
-                            if msg == ErrMsg::CloseSocket {
+                        Ok(WanMsgEnum::MsgKind(sid, msg)) => {
+                            if msg == MsgKind::CloseSocket {
                                 tcp_listen_service.del_tcp_socket(sid);
                             }
                         }
