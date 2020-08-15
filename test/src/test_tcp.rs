@@ -1,5 +1,5 @@
 use log::{error, info, warn};
-
+use std::io::Split;
 /*
 use mini_socket::tcp_socket::TcpSocket;
 use mini_socket::tcp_socket_reader::ReadResult;
@@ -38,6 +38,7 @@ pub fn test() {
 
 fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
     let mut client = TcpSocket::new(socket, 10240);
+    //socket.split()
     thread::spawn(move || {
         info!("client-->{:?}", std::thread::current().id());
         let mut msg_num: u64 = 0;

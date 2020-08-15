@@ -2,6 +2,7 @@
 use mini_utils::logger::Logger;
 //use mini_utils::time;
 pub mod test_tcp;
+use std::env;
 
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,
@@ -45,6 +46,11 @@ where
 }
 
 fn main() {
+    let path = env::current_dir().unwrap();
+    println!("The current directory is {}", path.display());
+
+    println!("Tevn is {} ", env!("PATH"));
+
     let th = Box::new(TestHello::default());
 
     let t: TestTrait<TestHello> = TestTrait::new();

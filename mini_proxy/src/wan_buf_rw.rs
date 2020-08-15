@@ -123,11 +123,11 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
             let result = write_data(&bw.head_data[bw.head_pos..], &mut wsize, socket);
             if result == WriteResult::Finish {
                 bw.head_pos = MSG_HEAD_SIZE;
-            }else {
+            } else {
                 if WriteResult::BufferFull == result {
                     bw.head_pos += wsize;
                 }
-                return result
+                return result;
             }
         }
 
