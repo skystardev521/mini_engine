@@ -77,11 +77,7 @@ impl Logger /*<W>*/ {
                 Err(err) => return Err(format!("create_dir:{:?} error:{}", dir, err)),
             }
         }
-        match OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&str_path)
-        {
+        match OpenOptions::new().append(true).create(true).open(&str_path) {
             Ok(file) => {
                 let logger = Box::new(Logger {
                     level: log_level,

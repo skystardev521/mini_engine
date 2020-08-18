@@ -1,6 +1,6 @@
 //use std::thread;
 use mini_utils::logger::Logger;
-//use mini_utils::time;
+use mini_utils::timer::{Timer, Timer1};
 pub mod test_tcp;
 use std::env;
 
@@ -46,6 +46,16 @@ where
 }
 
 fn main() {
+
+    let mut data = 1;
+    let mut cb = Box::new(move ||{
+        data +=1;
+    });
+    
+    //let mut t = Timer::new(1, 1, cb);
+
+    //t.call();
+
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());
 

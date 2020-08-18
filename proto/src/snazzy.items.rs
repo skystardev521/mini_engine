@@ -1,9 +1,9 @@
 /// A snazzy new shirt!
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Shirt {
-    #[prost(string, tag = "1")]
+    #[prost(string, tag="1")]
     pub color: std::string::String,
-    #[prost(enumeration = "shirt::Size", tag = "2")]
+    #[prost(enumeration="shirt::Size", tag="2")]
     pub size: i32,
 }
 pub mod shirt {
