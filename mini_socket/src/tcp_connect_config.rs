@@ -6,8 +6,6 @@ pub struct TcpConnectConfig {
     /// false-->有数据立刻发送减少延时
     /// true--->缓存中积累定数据才发送
     pub tcp_nodelay: bool,
-    /// 网络消息最大字节
-    pub msg_max_size: usize,
     /// 要连接的socket_addr
     pub socket_addr: String,
     /// 断线重连间隔，单位毫秒
@@ -27,7 +25,6 @@ impl TcpConnectConfig {
     pub fn new() -> Self {
         TcpConnectConfig {
             tcp_nodelay: false,
-            msg_max_size: 65536,
             reconnect_interval: 50,
             msg_deque_max_len: 102400,
             socket_read_buffer: 512000,
@@ -36,12 +33,6 @@ impl TcpConnectConfig {
             name: "Conn_Socket_Addr".into(),
             socket_addr: "0.0.0.0:8888".into(),
         }
-    }
-
-    /// 网络消息最大字节
-    pub fn set_msg_max_size(&mut self, val: usize) -> &mut Self {
-        self.msg_max_size = val;
-        self
     }
 
     pub fn set_socket_addr(&mut self, val: String) -> &mut Self {

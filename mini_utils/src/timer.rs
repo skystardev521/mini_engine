@@ -1,57 +1,30 @@
+use crate::time;
 use std::collections::VecDeque;
-pub struct Timer {
-    /// 运行次数
-    /// <0无限次数
-    //call_num: i16,
-    /// 下次运行时间
-    expire: u64,
-    /// 运行间隔时长
-    interval: u32,
-    /// 运行次数-1无限
-    //call_fn: Box<dyn FnMut(/*&mut Timer*/)>,
-    call_fn: Box<dyn TEntiy>,
+pub struct TEntity {
+    /// 过期时间
+    pub(crate) expire: u64,
+    /// 运行间隔
+    pub(crate) interval: u64,
+    /// 任务结构体
+    pub(crate) task: Box<dyn TimedTask>,
 }
 
-pub trait TEntiy{
+pub struct Timer {
+    pub vec_deque: VecDeque<TEntity>,
+}
 
-    fn call(&mut self);
-
+pub trait TimedTask {
+    /// true:任务完成
+    fn execute(&mut self) -> bool;
 }
 
 impl Timer {
-    
-    /*
-    /// 
-    pub fn new(dely: u32, interval: u32, call_fn: Box<dyn FnMut(/*&mut Timer*/)>) -> Timer
-    {
-        Timer {
-            //call_num,
+    pub fn add_task(&mut self, delay: u64, interval: u64, task: Box<dyn TimedTask>) {
+        let te = TEntity {
+            task,
             interval,
-            call_fn,
-            expire:0
-        }
+            expire: time::timestamp() + delay,
+        };
+        self.vec_deque.push_back(te);
     }
-    */
-
-    pub fn new(dely: u32, interval: u32, call_fn: Box<dyn TEntiy>) -> Timer
-    {
-        Timer {
-            //call_num,
-            interval,
-            call_fn,
-            expire:0
-        }
-    }
-
-    /*
-    //pub(crate) fn call(&mut self){
-    pub fn call(&mut self){
-        (self.call_fn)();
-    }
-    */
-
-}
-
-pub struct Timer1<T> {
-    pub vec_deque: VecDeque<T>,
 }

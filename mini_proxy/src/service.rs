@@ -65,20 +65,16 @@ impl Service {
         loop {
             match self.wan_service.receiver() {
                 None => return true,
-                Some(msg) => {
-                    //self.sender_lan(msg);
-                    self.sender_wan(msg);
-                }
                 //要把tcp_socket id  转 用户id
                 Some(WanMsgEnum::NetMsg(sid, msg)) => {
-                    self.sender_lan(LanMsgEnum::NetMsg(sid, LanNetMsg { sid: sid, msg: msg }));
-                    //self.sender_wan(msg);
+                    self.sender_wan(WanMsgEnum::NetMsg(sid, msg));
+                    //self.sender_lan(LanMsgEnum::NetMsg(sid, LanNetMsg { sid: sid, msg: msg }));
                 }
 
                 //要把tcp_socket id  转 用户id
                 Some(WanMsgEnum::MsgKind(sid, kind)) => {
-                    self.sender_lan(LanMsgEnum::MsgKind(sid, LanMsgKind { sid, kind }));
-                    //self.sender_wan(msg);
+                    //self.sender_wan(WanMsgEnum::MsgKind(sid, kind));
+                    //self.sender_lan(LanMsgEnum::MsgKind(sid, LanMsgKind { sid, kind }));
                 }
             }
             num += 1;

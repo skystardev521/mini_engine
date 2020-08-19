@@ -42,11 +42,6 @@ impl Default for NetBufRw {
 }
 
 impl TcpBufRw<NetMsg> for NetBufRw {
-    /// 网络数据包体 最大字节数
-    fn set_msg_max_size(&mut self, msg_max_size: usize) {
-        self.msg_max_size = msg_max_size;
-    }
-
     /// 把数据写到tcp buffer中
     fn write(&mut self, socket: &mut TcpStream, data: &mut NetMsg) -> WriteResult {
         WriteResult::Finish

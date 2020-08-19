@@ -63,7 +63,6 @@ where
         let tcp_socket_mgmt = TcpSocketMgmt::new(
             TCP_LISTEN_ID,
             config.max_tcp_socket,
-            config.msg_max_size,
             config.msg_deque_max_len as usize,
         );
 
@@ -129,7 +128,7 @@ where
                     self.del_tcp_socket(sid);
                     (self.net_msg_cb_fn)(sid, vec_msg);
                     (self.msg_kind_cb_fn)(sid, MsgKind::SocketClose);
-                    error!("tcp_socket.reader.read id:{} err:{}", sid, err);
+                    error!("tcp_socket.read id:{} err:{}", sid, err);
                 }
             }
         } else {
@@ -244,7 +243,6 @@ where
     }
     /// is_send_sys_msg:删除后要不要通知业务层
     pub fn del_tcp_socket(&mut self, sid: u64) {
-        info!("tcp_socket_mgmt.del_tcp_socket({}))", sid);
         match self.tcp_socket_mgmt.del_tcp_socket(sid) {
             Ok(tcp_socket) => {
                 let rawfd = tcp_socket.socket.as_raw_fd();

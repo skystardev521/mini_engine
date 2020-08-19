@@ -348,9 +348,7 @@ where
                         config.socket_write_buffer,
                     )?;
                     debug!("connect:{} success", config.socket_addr);
-                    let mut tcp_buf_rw = Box::new(TBRW::default());
-                    tcp_buf_rw.set_msg_max_size(config.msg_max_size);
-                    return Ok(TcpSocket::new(socket, tcp_buf_rw));
+                    return Ok(TcpSocket::new(socket, Box::new(TBRW::default())));
                 }
                 Err(err) => return Err(err.to_string()),
             }

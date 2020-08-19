@@ -64,6 +64,7 @@ impl WanService {
     }
 }
 
+#[allow(dead_code)]
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
 ) -> Box<dyn FnOnce(Receiver<WanMsgEnum>, SyncSender<WanMsgEnum>) + Send> {
@@ -106,31 +107,16 @@ fn worker_closure(
             }
             //-----------------------------------------------------------------------------
 
-            //let mut single_write_msg_count;
-
-            let mut single_call_epoll_wait_count;
-
             let wait_timeout = tcp_listen_config.epoll_wait_timeout;
-
-            //let single_write_msg_max_num = tcp_listen_config.single_write_msg_max_num;
-            let single_call_epoll_wait_max_num = tcp_listen_config.single_call_epoll_wait_max_num;
 
             loop {
                 tcp_listen_service.tick();
-                single_call_epoll_wait_count = 0;
                 loop {
                     match tcp_listen_service.epoll_event(wait_timeout) {
                         Ok(0) => {
                             break;
                         }
-                        Ok(_) => {
-                            /*
-                            single_call_epoll_wait_count += 1;
-                            if single_call_epoll_wait_count == single_call_epoll_wait_max_num {
-                                break;
-                            }
-                            */
-                        }
+                        Ok(_) => {}
                         Err(err) => {
                             error!("TcpListenService epoll_event:{}", err);
                             break;
@@ -144,12 +130,6 @@ fn worker_closure(
                         Ok(WanMsgEnum::NetMsg(sid, msg)) => {
                             //这里要优化 判断是否广播消息
                             tcp_listen_service.write_net_msg(sid, msg);
-                            /*
-                            single_write_msg_count += 1;
-                            if single_write_msg_count == single_write_msg_max_num {
-                                break;
-                            }
-                            */
                         }
                         Ok(WanMsgEnum::MsgKind(sid, msg)) => {
                             if msg == MsgKind::CloseSocket {

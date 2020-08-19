@@ -1,7 +1,8 @@
 //use std::thread;
 use mini_utils::logger::Logger;
-use mini_utils::timer::{Timer, Timer1};
+use mini_utils::timer::Timer;
 pub mod test_tcp;
+pub mod wan_buf_rw;
 use std::env;
 
 pub struct ThreadPool {
@@ -47,15 +48,7 @@ where
 
 fn main() {
 
-    let mut data = 1;
-    let mut cb = Box::new(move ||{
-        data +=1;
-    });
-    
-    //let mut t = Timer::new(1, 1, cb);
-
-    //t.call();
-
+    /*
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());
 
@@ -68,13 +61,14 @@ fn main() {
     t.hello.say_hi();
 
     let xxx = vec![0u8; 10];
-
+    */
+    
     match Logger::init(&String::from("info"), &String::from("logs/test_log.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),
     }
 
-    //test_tcp::test();
+    test_tcp::test();
 
     /*
         let mut thread_pool: Vec<thread::JoinHandle<()>> = vec![];

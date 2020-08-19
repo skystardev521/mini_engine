@@ -8,20 +8,14 @@ pub struct TcpSocketMgmt<MSG> {
     next_sid: u64,
     /// 监听ID
     listen_id: u64,
-    /// 每包的最大字节数
-    msg_max_size: usize,
+    /// 待发的消息队列最大长度
     msg_deque_max_len: usize,
     /// 可以优化使用别的数据结构
     tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>,
 }
 
 impl<MSG> TcpSocketMgmt<MSG> {
-    pub fn new(
-        listen_id: u64,
-        max_socket: u32,
-        msg_max_size: usize,
-        msg_deque_max_len: usize,
-    ) -> Self {
+    pub fn new(listen_id: u64, max_socket: u32, msg_deque_max_len: usize) -> Self {
         let tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>;
         if max_socket < 8 {
             tcp_socket_hash_map = HashMap::with_capacity(8);
@@ -32,7 +26,6 @@ impl<MSG> TcpSocketMgmt<MSG> {
         TcpSocketMgmt {
             listen_id,
             next_sid: 0,
-            msg_max_size,
             msg_deque_max_len,
             tcp_socket_hash_map,
         }
@@ -77,7 +70,7 @@ impl<MSG> TcpSocketMgmt<MSG> {
         if let Some(tcp_socket) = self.tcp_socket_hash_map.remove(&sid) {
             Ok(tcp_socket)
         } else {
-            Err(format!("del_tcp_socket sid:{} not exists", sid))
+            Err(format!("sid:{} not exists", sid))
         }
     }
 
@@ -89,10 +82,10 @@ impl<MSG> TcpSocketMgmt<MSG> {
             return Err("Max Socket Number".into());
         }
         self.next_sid = self.next_sid();
-        let mut tcp_buf_rw = Box::new(TBRW::default());
-        tcp_buf_rw.set_msg_max_size(self.msg_max_size);
-        self.tcp_socket_hash_map
-            .insert(self.next_sid, TcpSocket::new(socket, tcp_buf_rw));
+        self.tcp_socket_hash_map.insert(
+            self.next_sid,
+            TcpSocket::new(socket, Box::new(TBRW::default())),
+        );
         Ok(self.next_sid)
     }
 }

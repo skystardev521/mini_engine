@@ -65,7 +65,7 @@ impl ConnService {
         }
     }
 }
-
+#[allow(dead_code)]
 fn worker_closure(
     vec_tcp_connect_config: Vec<TcpConnectConfig>,
 ) -> Box<dyn FnOnce(Receiver<MsgEnum>, SyncSender<MsgEnum>) + Send> {

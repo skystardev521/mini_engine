@@ -65,7 +65,7 @@ impl LanService {
         }
     }
 }
-
+#[allow(dead_code)]
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
 ) -> Box<dyn FnOnce(Receiver<LanMsgEnum>, SyncSender<LanMsgEnum>) + Send> {

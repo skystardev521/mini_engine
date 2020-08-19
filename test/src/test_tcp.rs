@@ -1,9 +1,8 @@
 use log::{error, info, warn};
-use std::io::Split;
-/*
+
 use mini_socket::tcp_socket::TcpSocket;
-use mini_socket::tcp_socket_reader::ReadResult;
-use mini_socket::tcp_socket_writer::WriteResult;
+use mini_socket::tcp_buf_rw::ReadResult;
+use mini_socket::tcp_buf_rw::WriteResult;
 use mini_utils::bytes;
 
 use std::net::Shutdown;
@@ -12,6 +11,9 @@ use std::thread;
 use std::time::Duration;
 
 use mini_utils::time;
+
+use crate::wan_buf_rw::WanBufRw;
+
 
 const LOG_FILE_DURATION: u64 = 60 * 60 * 1000;
 
@@ -23,7 +25,7 @@ pub fn test() {
 
     thread::sleep(std::time::Duration::from_secs(1));
 
-    for _ in 0..100 {
+    for _ in 0..500 {
         thread_pool.push(new_client().unwrap());
     }
 
@@ -37,20 +39,20 @@ pub fn test() {
 }
 
 fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
-    let mut client = TcpSocket::new(socket, 10240);
-    //socket.split()
     thread::spawn(move || {
+        let wan_buf_rw = Box::new(WanBufRw::default());
+        let mut client = TcpSocket::new(socket, wan_buf_rw);
         info!("client-->{:?}", std::thread::current().id());
         let mut msg_num: u64 = 0;
 
         let mut ext_data: u32 = 0;
         loop {
             ext_data += 1;
-            let msg_data = encode(ext_data);
-
-            if let Err(err) = client.writer.add_msg_data(msg_data) {
-                info!("add_msg_data result err:{}", err);
+            if ext_data == u32::MAX{
+                ext_data = 0;
             }
+            let msg_data = encode(ext_data);
+            client.push_vec_queue(msg_data);
             msg_num += 1;
             if msg_num % 10000 == 0 {
                 info!("write data:{} {:?}", msg_num, thread::current().id());
@@ -81,18 +83,17 @@ fn decode(buffer: &Vec<u8>) -> (u16, u32, Vec<u8>) {
     (pid, ext, data)
 }
 
-fn write(client: &mut TcpSocket) -> bool {
+fn write(client: &mut TcpSocket<Vec<u8>>) -> bool {
     //let mut msg_num: u64 = 0;
     loop {
-        match client.writer.write(&mut client.socket) {
+        match client.write() {
             WriteResult::Finish => {
-                //info!("write result:Finish");
-                thread::sleep(std::time::Duration::from_millis(3));
+                thread::sleep(std::time::Duration::from_millis(10));
                 return true;
             }
             WriteResult::BufferFull => {
-                //thread::sleep(std::time::Duration::from_millis(1));
-                return true;
+                thread::sleep(std::time::Duration::from_millis(10));
+                //return true;
             }
             WriteResult::Error(err) => {
                 error!("write result error:{}", err);
@@ -103,48 +104,43 @@ fn write(client: &mut TcpSocket) -> bool {
 }
 
 fn loop_read(socket: TcpStream) -> thread::JoinHandle<()> {
-    let mut client = TcpSocket::new(socket, 10240);
     thread::spawn(move || loop {
+        let socket = socket.try_clone().unwrap();
+        let wan_buf_rw = Box::new(WanBufRw::default());
+        let mut client = TcpSocket::new(socket, wan_buf_rw);
         if read(&mut client) == false {
             break;
         }
     })
 }
 
-fn read(client: &mut TcpSocket) -> bool {
-    //let mut msg_num: u64 = 0;
+fn read(client: &mut TcpSocket<Vec<u8>>) -> bool {
+    let mut vec_share = vec![0u8;1024 * 1024];
     loop {
-        //info!("start read {:?}", thread::current().id());
-        match client.reader.read(&mut client.socket) {
-            ReadResult::Data(msg_data) => {
-                let (pid, ext, data) = decode(&msg_data);
-                /*
-                info!(
-                    "read pid:{} ext:{} data:{}",
-                    pid,
-                    ext,
-                    String::from_utf8_lossy(&data).to_string()
-                );
-                */
-                if ext % 10000 == 0 {
-                    info!("read ext data:{} {:?}", ext, thread::current().id());
+        match client.read(&mut vec_share) {
+            ReadResult::Data(vec_msg) => {
+                for msg in vec_msg{
+                    let (pid, ext, data) = decode(&msg);
+                    /*
+                    info!(
+                        "read pid:{} ext:{} data:{}",
+                        pid,
+                        ext,
+                        String::from_utf8_lossy(&data).to_string()
+                    );
+                    */
+                    if ext % 10000 == 0 {
+                        info!("read ext data:{} {:?}", ext, thread::current().id());
+                    }
                 }
             }
-
-            ReadResult::BufferIsEmpty => {
-                //thread::sleep(std::time::Duration::from_millis(1));
-            }
-            ReadResult::ReadZeroSize => {
-                error!(
-                    "read({:?}) ReadZeroSize",
-                    client.socket.local_addr().unwrap()
-                );
-                if let Err(err) = client.socket.shutdown(Shutdown::Both) {
-                    error!("shutdown Error:{}", err);
+            ReadResult::Error(vec_msg, err) => {
+                for msg in vec_msg{
+                    let (pid, ext, data) = decode(&msg);
+                    if ext % 10000 == 0 {
+                        info!("read ext data:{} {:?}", ext, thread::current().id());
+                    }
                 }
-                return false;
-            }
-            ReadResult::Error(err) => {
                 error!(
                     "read({:?}) error:{}",
                     client.socket.local_addr().unwrap(),
@@ -176,4 +172,4 @@ fn new_client() -> Result<(thread::JoinHandle<()>, thread::JoinHandle<()>), Stri
         }
     }
 }
-*/
+

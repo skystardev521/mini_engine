@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MsgKind {
     /// 新建一个链接
     NewSocket = 0,

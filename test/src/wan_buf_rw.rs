@@ -129,11 +129,10 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
             fill_head(bw.id, buffer.len(), &mut bw.head_data);
             bw.id = next_id(bw.id);
         }
-        
+        // 写成功的字节数
+        let mut wsize = 0;
         // 头部数据还没写完
         if bw.head_pos < MSG_HEAD_SIZE {
-            // 写成功的字节数
-            let mut wsize = 0;
             let result = write_data(&bw.head_data[bw.head_pos..], &mut wsize, socket);
             if result == WriteResult::Finish {
                 bw.head_pos = MSG_HEAD_SIZE;
@@ -144,8 +143,6 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
                 return result;
             }
         }
-        // 写成功的字节数
-        let mut wsize = 0;
         // 把包休数据写入
         let result = write_data(&buffer[bw.body_pos..], &mut wsize, socket);
         if WriteResult::Finish == result {
@@ -155,6 +152,7 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
         if WriteResult::BufferFull == result {
             bw.body_pos += wsize;
         }
+
         return result;
     }
 
