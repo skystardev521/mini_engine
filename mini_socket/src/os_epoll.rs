@@ -78,6 +78,7 @@ impl OSEpoll {
     pub fn wait(&self, timeout: i32, events: &mut Vec<libc::epoll_event>) -> Result<u32, String> {
         unsafe {
             let ret = libc::epoll_wait(self.fd, &mut events[0], events.len() as i32, timeout);
+            //println!("ret:{} epoll_event:{}", ret, mini_utils::time::timestamp());
             if ret > -1 {
                 return Ok(ret as u32);
             }

@@ -46,7 +46,9 @@ impl<MSG> TcpSocket<MSG> {
         let socket = &mut self.socket;
         while let Some(msg) = self.vec_deque.front_mut() {
             match self.tcp_buf_rw.write(socket, msg) {
-                WriteResult::Finish => {self.vec_deque.pop_front();}
+                WriteResult::Finish => {
+                    self.vec_deque.pop_front();
+                }
                 WriteResult::BufferFull => return WriteResult::BufferFull,
                 WriteResult::Error(err) => return WriteResult::Error(err),
             }

@@ -42,6 +42,7 @@ pub struct bufWriter {
     id: u16,
     body_pos: usize,
     head_pos: usize,
+    is_fill_head: bool,
     head_data: [u8; MSG_HEAD_SIZE],
 }
 
@@ -59,6 +60,7 @@ impl Default for WanBufRw {
                 id: 0,
                 body_pos: 0,
                 head_pos: 0,
+                is_fill_head: false,
                 head_data: [0u8; MSG_HEAD_SIZE],
             },
         }
@@ -66,7 +68,7 @@ impl Default for WanBufRw {
 }
 
 #[inline]
-fn next_id(id: u16)->u16{
+fn next_id(id: u16) -> u16 {
     if id == MSG_MAX_ID {
         0
     } else {
@@ -77,31 +79,27 @@ fn next_id(id: u16)->u16{
 #[inline]
 fn split_head(buffer: &[u8]) -> (u16, usize) {
     let u32_val = bytes::read_u32(buffer);
-
-    //println!("split_head id:{}", (u32_val << 20 >> 20));
-
     //消息id                      //消息字节
     ((u32_val << 20 >> 20) as u16, (u32_val >> 12) as usize)
 }
 
 #[inline]
-fn fill_head(id: u16, msg_size: usize, buffer: &mut [u8]) {
-    let u32_val = (msg_size as u32) << 12;
-
-    //println!("fill_head id:{}", id);
-
+fn fill_head(id: u16, msize: usize, buffer: &mut [u8]) {
+    let u32_val = (msize as u32) << 12;
     bytes::write_u32(buffer, u32_val + id as u32);
 }
 
 fn write_data(buffer: &[u8], wsize: &mut usize, socket: &mut TcpStream) -> WriteResult {
     loop {
         match socket.write(&buffer) {
-            Ok(0) => return WriteResult::Error("disconnect".into()),
+            Ok(0) => {
+                return WriteResult::Error("disconnect".into());
+            }
             Ok(size) => {
                 if size == buffer.len() {
                     return WriteResult::Finish;
                 } else {
-                    *wsize = size;
+                    *wsize += size;
                     return WriteResult::BufferFull;
                 }
             }
@@ -125,12 +123,13 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
         let bw = &mut self.buf_writer;
 
         // 新的消息包
-        if bw.head_pos == 0 {
+        if bw.head_pos == 0 && !bw.is_fill_head {
+            bw.is_fill_head = true;
             fill_head(bw.id, buffer.len(), &mut bw.head_data);
             bw.id = next_id(bw.id);
         }
-        
-        // 头部数据还没写完
+
+        // 写头部数据
         if bw.head_pos < MSG_HEAD_SIZE {
             // 写成功的字节数
             let mut wsize = 0;
@@ -151,6 +150,7 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
         if WriteResult::Finish == result {
             bw.head_pos = 0;
             bw.body_pos = 0;
+            bw.is_fill_head = false;
         }
         if WriteResult::BufferFull == result {
             bw.body_pos += wsize;
@@ -164,6 +164,7 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
         let mut in_pos = 0;
         let mut vec_msg: Vec<Vec<u8>> = vec![];
         let br = &mut self.buf_reader;
+
         loop {
             match socket.read(&mut buffer[in_pos..]) {
                 Ok(0) => {
@@ -171,6 +172,7 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
                 }
                 Ok(size) => {
                     in_pos += size;
+                    
                     // 读完了TCP缓存区数据
                     if in_pos < buffer.capacity() {
                         match br.split_msg_data(in_pos, buffer, &mut vec_msg) {
@@ -234,13 +236,13 @@ impl bufReader {
                 out_pos += MSG_HEAD_SIZE;
 
                 //获取包头数据
-                let (id, msg_size) = split_head(&head_data);
-                if let Some(err) = self.check_head_data(id, msg_size) {
+                let (id, body_size) = split_head(&head_data);
+                if let Some(err) = self.check_head_data(id, body_size) {
                     return Some(err);
                 }
 
                 //分配包体内存
-                self.body_data = vec![0u8; msg_size];
+                self.body_data = vec![0u8; body_size];
 
                 let buffer_data_len = in_pos - out_pos;
                 //没有包体数据
@@ -249,7 +251,7 @@ impl bufReader {
                     return None;
                 }
                 //不够包体数据
-                if buffer_data_len < msg_size {
+                if buffer_data_len < body_size {
                     self.body_pos = buffer_data_len;
                     //不够包体数据把数据存到body_data
                     unsafe {
@@ -260,20 +262,19 @@ impl bufReader {
                         );
                     }
                     return None;
+                }
                 //足够包体数据
-                } 
-
                 unsafe {
                     ptr::copy_nonoverlapping(
                         buffer[out_pos..].as_ptr(),
                         self.body_data[0..].as_mut_ptr(),
-                        msg_size,
+                        body_size,
                     );
                 }
                 self.head_pos = 0;
-                out_pos += msg_size;
+                out_pos += body_size;
                 vec_msg.push(mem::replace(&mut self.body_data, vec![]));
-            
+
                 continue;
             }
 
@@ -330,8 +331,7 @@ impl bufReader {
                     }
                     self.body_pos = buffer_data_len;
                     return None;
-                
-                } 
+                }
                 //足够包体数据
                 unsafe {
                     ptr::copy_nonoverlapping(
@@ -343,7 +343,7 @@ impl bufReader {
                 self.head_pos = 0;
                 out_pos += msg_size;
                 vec_msg.push(mem::replace(&mut self.body_data, vec![]));
-                               continue;
+                continue;
             }
             //--------------------把数据存到head_data
             let buffer_data_len = in_pos - out_pos;
@@ -359,8 +359,7 @@ impl bufReader {
                 }
                 self.body_pos += buffer_data_len;
                 return None;
-            
-            } 
+            }
             //足够包体数据
             unsafe {
                 ptr::copy_nonoverlapping(
@@ -376,24 +375,22 @@ impl bufReader {
     }
 
     #[inline]
-    fn check_head_data(&mut self, id: u16, msg_size: usize) -> Option<String> {
+    fn check_head_data(&mut self, id: u16, body_size: usize) -> Option<String> {
         if id != self.id {
-            println!("id:{} cur_id:{}", id, self.id);
             return Some("Msg Id Error".into());
         }
 
         self.id = next_id(self.id);
 
-        if msg_size == 0 {
+        if body_size == 0 {
             return Some("Msg Size is 0".into());
         }
-        if msg_size > MSG_MAX_SIZE {
-            return Some(format!("Msg Size:{} Too Large", msg_size));
+        if body_size > MSG_MAX_SIZE {
+            return Some(format!("Msg Size:{} Too Large", body_size));
         }
         return None;
     }
 }
-
 
 /*
 impl bufReader {
@@ -451,7 +448,7 @@ impl bufReader {
                     }
                     return None;
                 //足够包体数据
-                } 
+                }
 
                 unsafe {
                     ptr::copy_nonoverlapping(
@@ -463,7 +460,7 @@ impl bufReader {
                 self.head_pos = 0;
                 out_pos += msg_size;
                 vec_msg.push(mem::replace(&mut self.body_data, vec![]));
-            
+
                 continue;
             }
 
@@ -520,8 +517,8 @@ impl bufReader {
                     }
                     self.body_pos = buffer_data_len;
                     return None;
-                
-                } 
+
+                }
                 //足够包体数据
                 unsafe {
                     ptr::copy_nonoverlapping(
@@ -549,8 +546,8 @@ impl bufReader {
                 }
                 self.body_pos += buffer_data_len;
                 return None;
-            
-            } 
+
+            }
             //足够包体数据
             unsafe {
                 ptr::copy_nonoverlapping(

@@ -61,7 +61,6 @@ impl Execute {
             match Connect::new(config) {
                 Ok(conn) => match conn.connect() {
                     Ok(()) => {
-                        println!("connect database:{} Succ", database);
                         self.conn_hm.insert(database, conn);
                     }
                     Err(err) => {

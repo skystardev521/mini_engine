@@ -91,6 +91,7 @@ where
         self.tcp_socket_mgmt.tcp_socket_count()
     }
     pub fn epoll_event(&mut self, wait_timeout: i32) -> Result<u32, String> {
+        // todo 根据测试代码 死循环向同一条连接中发数据 wait 200多毫秒才会触发一次事件
         match self.os_epoll.wait(wait_timeout, &mut self.vec_epoll_event) {
             Ok(0) => Ok(0),
             Ok(epevs) => {
@@ -100,7 +101,6 @@ where
                         self.accept_event();
                         continue;
                     }
-
                     if (event.events & libc::EPOLLIN as u32) != 0 {
                         self.read_event(event.u64);
                     }
@@ -157,7 +157,7 @@ where
                 }
             }
             None => {
-                info!("write_net_msg socket id no exitis:{}", sid);
+                info!("write_net_msg socket id:{} no exitis", sid);
                 (self.msg_kind_cb_fn)(sid, MsgKind::SocketIdNotExist);
             }
         }

@@ -67,7 +67,7 @@ impl Service {
                 None => return true,
                 //要把tcp_socket id  转 用户id
                 Some(WanMsgEnum::NetMsg(sid, msg)) => {
-                    self.sender_wan(WanMsgEnum::NetMsg(sid, msg));
+                    //self.sender_wan(WanMsgEnum::NetMsg(sid, msg));
                     //self.sender_lan(LanMsgEnum::NetMsg(sid, LanNetMsg { sid: sid, msg: msg }));
                 }
 

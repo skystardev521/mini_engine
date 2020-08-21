@@ -47,7 +47,6 @@ where
 }
 
 fn main() {
-
     /*
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());
@@ -62,7 +61,7 @@ fn main() {
 
     let xxx = vec![0u8; 10];
     */
-    
+
     match Logger::init(&String::from("info"), &String::from("logs/test_log.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),

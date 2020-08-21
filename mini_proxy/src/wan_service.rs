@@ -39,7 +39,9 @@ impl WanService {
     pub fn receiver(&self) -> Option<WanMsgEnum> {
         match self.worker.receiver() {
             RecvResEnum::Empty => return None,
-            RecvResEnum::Data(net_msg) => return Some(net_msg),
+            RecvResEnum::Data(msg_enum) => {
+                return Some(msg_enum);
+            }
             RecvResEnum::Disconnected => {
                 error!("Worker:{} Disconnected", self.worker.get_name());
                 return None;

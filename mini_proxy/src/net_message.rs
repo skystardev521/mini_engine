@@ -11,7 +11,7 @@ pub enum LanMsgEnum {
 
 pub struct LanNetMsg {
     pub sid: u64,
-    pub msg: Vec<u8>,
+    pub buff: Vec<u8>,
 }
 
 pub struct LanMsgKind {
