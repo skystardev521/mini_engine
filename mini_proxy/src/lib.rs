@@ -1,9 +1,10 @@
 mod auth;
 mod config;
 mod lan_buf_rw;
+mod lan_msg;
 mod lan_service;
-mod net_message;
 mod wan_buf_rw;
+mod wan_msg;
 mod wan_service;
 
 /*

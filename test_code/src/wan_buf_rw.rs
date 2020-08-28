@@ -172,7 +172,7 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
                 }
                 Ok(size) => {
                     in_pos += size;
-                    
+
                     // 读完了TCP缓存区数据
                     if in_pos < buffer.capacity() {
                         match br.split_msg_data(in_pos, buffer, &mut vec_msg) {

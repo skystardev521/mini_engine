@@ -105,7 +105,7 @@ impl log::Log for Logger /*<W>*/ {
             return;
         }
         if let Ok(mut file_lock) = self.file.lock() {
-            let time = time::timestamp_to_time(time::timestamp() + HOUR_8);
+            let time = time::ts_to_time(time::timestamp() + HOUR_8);
             if let Err(_err) = file_lock.write(fmt_log(&record, &time).as_bytes()) {
                 return;
             }
@@ -120,7 +120,7 @@ impl log::Log for Logger /*<W>*/ {
             }
 
             let now_timestame = time::timestamp() + HOUR_8;
-            let open_file_time = time::timestamp_to_time(now_timestame);
+            let open_file_time = time::ts_to_time(now_timestame);
             let new_file_path = new_file_path(&self.str_path, &open_file_time);
 
             if let Err(_) = fs::rename(&self.str_path, &new_file_path) {

@@ -9,7 +9,7 @@ use std::mem;
 use std::net::TcpStream;
 use std::ptr;
 
-use crate::net_message::LanNetMsg;
+use crate::lan_msg::NetMsg;
 
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;
@@ -17,8 +17,8 @@ pub const MSG_MAX_ID: u16 = 4095;
 ///数据包头长度4个字节
 /// msg id: 0 ~ 4095
 /// data size: 0 ~ (1024 * 1024)
-/// |data size:13~32位|+|MID:1~12位|
-pub const MSG_HEAD_SIZE: usize = 4;
+/// |data size:13~32位|+|MID:1~12位|uid:64|pid:16|ext:32|
+pub const MSG_HEAD_SIZE: usize = 18;
 
 /// 数据包体最大字节数
 pub const MSG_MAX_SIZE: usize = 1024 * 1024;
@@ -31,11 +31,14 @@ pub struct LanBufRw {
 pub struct bufReader {
     //包id(0~4096)
     id: u16,
+    pid: u16,
+    uid: u64,
     /// 0:no data
     head_pos: usize,
     /// 0:no data
     body_pos: usize,
     body_data: Vec<u8>,
+    net_msg: NetMsg,
     head_data: [u8; MSG_HEAD_SIZE],
 }
 
@@ -53,6 +56,8 @@ impl Default for LanBufRw {
         LanBufRw {
             buf_reader: bufReader {
                 id: 0,
+                uid: 0,
+                pid: 0,
                 body_pos: 0,
                 head_pos: 0,
                 body_data: vec![],
@@ -69,6 +74,7 @@ impl Default for LanBufRw {
     }
 }
 
+/*
 #[inline]
 fn next_id(id: u16) -> u16 {
     if id == MSG_MAX_ID {
@@ -77,19 +83,62 @@ fn next_id(id: u16) -> u16 {
         id + 1
     }
 }
+*/
+
+macro_rules! next_id {
+    ($id:expr)=>{
+        if $id == MSG_MAX_ID {
+            0
+        } else {
+            $id + 1
+        }
+    }
+}
 
 #[inline]
-fn split_head(buffer: &[u8]) -> (u16, usize) {
+fn split_head(buffer: &[u8]) -> (u16, usize, NetMsg) {
     let u32_val = bytes::read_u32(buffer);
-    //消息id                      //消息字节
-    ((u32_val << 20 >> 20) as u16, (u32_val >> 12) as usize)
+    let uid_val = bytes::read_u64(&buffer[4..]);
+    let pid_val = bytes::read_u16(&buffer[12..]);
+    let ext_val = bytes::read_u32(&buffer[14..]);
+
+    //消息id
+    let mid = (u32_val << 20 >> 20) as u16;
+    //消息字节
+    let msize = (u32_val >> 12) as usize;
+    (
+        mid,
+        msize,
+        NetMsg {
+            uid: uid_val,
+            pid: pid_val,
+            ext: ext_val,
+            data: vec![],
+        },
+    )
 }
 
+/*
 #[inline]
-fn fill_head(id: u16, msize: usize, buffer: &mut [u8]) {
-    let u32_val = (msize as u32) << 12;
-    bytes::write_u32(buffer, u32_val + id as u32);
+fn fill_head(id: u16, msize: usize, msg: &NetMsg, buffer: &mut [u8]) {
+    let u32_val = (msize as u32) << 12 + id as u32;
+    bytes::write_u32(buffer, u32_val);
+    bytes::write_u64(&mut buffer[4..], msg.uid);
+    bytes::write_u16(&mut buffer[12..], msg.pid);
+    bytes::write_u32(&mut buffer[14..], msg.ext);
 }
+*/
+//id: u16, msize: usize, msg: &NetMsg, buffer: &mut [u8]
+macro_rules! fill_head {
+    ($id:expr, $msize:expr, $msg:expr, $buffer:expr) => {
+        let u32_val = ($msize as u32) << 12 + $id as u32;
+        bytes::write_u32($buffer, u32_val);
+        bytes::write_u64(&mut $buffer[4..], $msg.uid);
+        bytes::write_u16(&mut $buffer[12..], $msg.pid);
+        bytes::write_u32(&mut $buffer[14..], $msg.ext);
+    }
+}
+
 
 fn write_data(buffer: &[u8], wsize: &mut usize, socket: &mut TcpStream) -> WriteResult {
     loop {
@@ -116,10 +165,10 @@ fn write_data(buffer: &[u8], wsize: &mut usize, socket: &mut TcpStream) -> Write
     }
 }
 
-impl TcpBufRw<LanNetMsg> for LanBufRw {
+impl TcpBufRw<NetMsg> for LanBufRw {
     /// 把数据写到tcp buffer中
-    fn write(&mut self, socket: &mut TcpStream, msg: &mut LanNetMsg) -> WriteResult {
-        if MSG_MAX_SIZE < msg.buff.len() {
+    fn write(&mut self, socket: &mut TcpStream, msg: &mut NetMsg) -> WriteResult {
+        if MSG_MAX_SIZE < msg.data.len() {
             return WriteResult::Error("msg size error".into());
         }
         let bw = &mut self.buf_writer;
@@ -127,8 +176,8 @@ impl TcpBufRw<LanNetMsg> for LanBufRw {
         // 新的消息包
         if bw.head_pos == 0 && !bw.is_fill_head {
             bw.is_fill_head = true;
-            fill_head(bw.id, msg.buff.len(), &mut bw.head_data);
-            bw.id = next_id(bw.id);
+            fill_head!(bw.id, msg.data.len(), msg.uid, &mut bw.head_data);
+            bw.id = next_id!(bw.id);
         }
 
         // 写头部数据
@@ -147,8 +196,8 @@ impl TcpBufRw<LanNetMsg> for LanBufRw {
         }
         // 写成功的字节数
         let mut wsize = 0;
-        // 把包休数据写入
-        let result = write_data(&msg.buff[bw.body_pos..], &mut wsize, socket);
+        // 把包体数据写入
+        let result = write_data(&msg.data[bw.body_pos..], &mut wsize, socket);
         if WriteResult::Finish == result {
             bw.head_pos = 0;
             bw.body_pos = 0;
@@ -162,9 +211,9 @@ impl TcpBufRw<LanNetMsg> for LanBufRw {
 
     /// 从tcp bufferfer中读取数据
     /// buffer: 共享缓冲区 这方式用于读小包的方案
-    fn read(&mut self, socket: &mut TcpStream, buffer: &mut Vec<u8>) -> ReadResult<LanNetMsg> {
+    fn read(&mut self, socket: &mut TcpStream, buffer: &mut Vec<u8>) -> ReadResult<NetMsg> {
         let mut in_pos = 0;
-        let mut vec_msg: Vec<Vec<u8>> = vec![];
+        let mut vec_msg: Vec<NetMsg> = vec![];
         let br = &mut self.buf_reader;
 
         loop {
@@ -174,7 +223,7 @@ impl TcpBufRw<LanNetMsg> for LanBufRw {
                 }
                 Ok(size) => {
                     in_pos += size;
-                    
+
                     // 读完了TCP缓存区数据
                     if in_pos < buffer.capacity() {
                         match br.split_msg_data(in_pos, buffer, &mut vec_msg) {
@@ -215,7 +264,7 @@ impl bufReader {
         &mut self,
         in_pos: usize,
         buffer: &Vec<u8>,
-        vec_msg: &mut Vec<Vec<u8>>,
+        vec_msg: &mut Vec<NetMsg>,
     ) -> Option<String> {
         let mut out_pos = 0;
         loop {
@@ -238,11 +287,12 @@ impl bufReader {
                 out_pos += MSG_HEAD_SIZE;
 
                 //获取包头数据
-                let (id, body_size) = split_head(&head_data);
+                let (id, body_size, sid) = split_head(&head_data);
                 if let Some(err) = self.check_head_data(id, body_size) {
                     return Some(err);
                 }
 
+                self.uid = sid;
                 //分配包体内存
                 self.body_data = vec![0u8; body_size];
 
@@ -275,7 +325,10 @@ impl bufReader {
                 }
                 self.head_pos = 0;
                 out_pos += body_size;
-                vec_msg.push(mem::replace(&mut self.body_data, vec![]));
+                vec_msg.push(NetMsg {
+                    uid: self.uid,
+                    data: mem::replace(&mut self.body_data, vec![]),
+                });
 
                 continue;
             }
@@ -308,11 +361,11 @@ impl bufReader {
                 self.head_pos = MSG_HEAD_SIZE;
                 //----------------------------------------------------------------------
                 //获取包头数据
-                let (id, msg_size) = split_head(&self.head_data);
+                let (id, msg_size, sid) = split_head(&self.head_data);
                 if let Some(err) = self.check_head_data(id, msg_size) {
                     return Some(err);
                 }
-
+                self.sid = sid;
                 //分配包体内存
                 self.body_data = vec![0u8; msg_size];
 
@@ -344,7 +397,10 @@ impl bufReader {
                 }
                 self.head_pos = 0;
                 out_pos += msg_size;
-                vec_msg.push(mem::replace(&mut self.body_data, vec![]));
+                vec_msg.push(NetMsg {
+                    uid: self.uid,
+                    data: mem::replace(&mut self.body_data, vec![]),
+                });
                 continue;
             }
             //--------------------把数据存到head_data
@@ -372,7 +428,10 @@ impl bufReader {
             }
             self.head_pos = 0;
             out_pos += body_data_tail;
-            vec_msg.push(mem::replace(&mut self.body_data, vec![]));
+            vec_msg.push(LanNetMsg {
+                sid: self.sid,
+                buf: mem::replace(&mut self.body_data, vec![]),
+            });
         }
     }
 
@@ -382,7 +441,7 @@ impl bufReader {
             return Some("Msg Id Error".into());
         }
 
-        self.id = next_id(self.id);
+        self.id = next_id!(self.id);
 
         if body_size == 0 {
             return Some("Msg Size is 0".into());

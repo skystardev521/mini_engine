@@ -1,20 +1,23 @@
-use mini_socket::msg_kind::MsgKind;
+use mini_socket::exc_kind::ExcKind;
 
 pub enum WanMsgEnum {
-    NetMsg(u64, Vec<u8>),
-    MsgKind(u64, MsgKind),
+    NetMsg(NetMsg),
+    ExcMsg(ExcMsg),
 }
 pub enum LanMsgEnum {
-    NetMsg(u64, LanNetMsg),
-    MsgKind(u64, LanMsgKind),
+    NetMsg(u64, NetMsg),
+    ExcMsg(u64, ExcMsg),
 }
 
-pub struct LanNetMsg {
+pub struct NetMsg {
     pub sid: u64,
-    pub buff: Vec<u8>,
+    pub pid: u16,
+    /// 列如用于：第1位加密，第2位压缩,3~12协议版本，13~32位事务id
+    pub ext: u32,
+    pub buf: Vec<u8>,
 }
 
-pub struct LanMsgKind {
+pub struct ExcMsg {
     pub sid: u64,
-    pub kind: MsgKind,
+    pub ekd: ExcKind,
 }

@@ -1,5 +1,5 @@
 [package]
-name = "test"
+name = "test_code"
 version = "0.1.0"
 authors = ["root"]
 edition = "2018"

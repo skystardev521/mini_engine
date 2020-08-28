@@ -666,6 +666,81 @@ pub fn read_bytes(buffer: &[u8]) -> Vec<u8> {
     result
 }
 
+use crate::bytes;
+
+#[test]
+fn test_bytes() {
+    let mut buffer = vec![0u8; 16];
+    let data_u16: u16 = 1024;
+    let u8s = data_u16.to_le_bytes();
+    bytes::write_bytes(&mut buffer, &u8s);
+    debug_assert_eq!(bytes::read_u16(&buffer), data_u16);
+    let data_u32: u32 = 999999;
+    bytes::write_u32(&mut buffer, data_u32);
+    debug_assert_eq!(bytes::read_u32(&buffer), data_u32);
+    let data_u64: u64 = 999999999999999;
+    bytes::write_u64(&mut buffer, data_u64);
+    debug_assert_eq!(bytes::read_u64(&buffer), data_u64);
+    let data_f32: f32 = 9999.999;
+    bytes::write_f32(&mut buffer, data_f32);
+    debug_assert_eq!(bytes::read_f32(&buffer), data_f32);
+    let data_f64: f64 = 99999999999999999.999;
+    bytes::write_f64(&mut buffer, data_f64);
+    debug_assert_eq!(bytes::read_f64(&buffer), data_f64);
+    let mut vbytes = vec![0u8; 42];
+    let mut _bytes = bytes::Bytes::new(vbytes.as_mut_slice());
+    _bytes.write_bytes("hello ccc".as_bytes());
+    _bytes.set_pos(0);
+    println!("str:{}", String::from_utf8_lossy(_bytes.read_bytes(8)));
+    let mut vec = vec![0u8; 42];
+    println!("Vec Len:{}", vec.len());
+    let mut _bytes = bytes::Bytes::new(vec.as_mut_slice());
+    println!("bytes size:{}", _bytes.get_size());
+    _bytes.write_u8(9);
+    _bytes.write_i8(-9);
+    _bytes.write_u16(999);
+    _bytes.write_i16(-999);
+    _bytes.write_u32(99999);
+    _bytes.write_i32(-99999);
+    _bytes.write_u64(9999999999);
+    _bytes.write_i64(-9999999999);
+    _bytes.write_f32(99999.99);
+    _bytes.write_f64(-99999.99);
+    println!("pos:{}", _bytes.get_pos());
+    _bytes.set_pos(0);
+    println!("read_u8:{}", _bytes.read_u8());
+    println!("read_i8:{}", _bytes.read_i8());
+    println!("read_u16:{}", _bytes.read_u16());
+    println!("read_i16:{}", _bytes.read_i16());
+    println!("read_u32:{}", _bytes.read_u32());
+    println!("read_i32:{}", _bytes.read_i32());
+    println!("read_u64:{}", _bytes.read_u64());
+    println!("read_i64:{}", _bytes.read_i64());
+    println!("read_f32:{}", _bytes.read_f32());
+    println!("read_f64:{}", _bytes.read_f64());
+    println!("pos:{}", _bytes.get_pos());
+    let mut f32_bytes = 99.9f32.to_le_bytes();
+    let mut _bytes = bytes::Bytes::new(&mut f32_bytes);
+    println!("leu8_to_f32:{}", _bytes.read_f32());
+    let mut f64_bytes = 99.9f64.to_le_bytes();
+    let mut _bytes = bytes::Bytes::new(&mut f64_bytes);
+    println!("leu8_to_f64:{}", _bytes.read_f64());
+    let mut be_bytes = 1u16.to_be_bytes();
+    let mut le_bytes = 1u16.to_le_bytes();
+    let mut bytes_be = bytes::Bytes::new(&mut be_bytes);
+    let mut bytes_le = bytes::Bytes::new(&mut le_bytes);
+    println!(
+        "be:{} le:{}",
+        bytes_be.read_u16().to_le(),
+        bytes_le.read_u16()
+    );
+    let mut fle_bytes = 1f32.to_le_bytes();
+    let mut fbe_bytes = 0.000000000000000000000000000000000000000046006f32.to_be_bytes();
+    let mut bytes_fle = bytes::Bytes::new(&mut fle_bytes);
+    let mut bytes_fbe = bytes::Bytes::new(&mut fbe_bytes);
+    println!("be:{} le:{}", bytes_fle.read_f32(), bytes_fbe.read_f32());
+}
+
 /*
 fn test() {
     let mut buffer = vec![0u8; 16];

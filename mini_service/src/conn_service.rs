@@ -1,6 +1,5 @@
 use crate::net_buf_rw::NetBufRw;
-use crate::net_message::MsgEnum;
-use crate::net_message::NetMsg;
+use crate::lan_msg::NetMsg;
 use mini_socket::msg_kind::MsgKind;
 use mini_socket::tcp_connect_config::TcpConnectConfig;
 use mini_socket::tcp_connect_service::TcpConnectService;

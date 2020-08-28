@@ -39,10 +39,10 @@ pub fn timestamp() -> u64 {
 #[inline]
 /// timezone：单位小时
 pub fn now_time(timezone: f32) -> Time {
-    timestamp_to_time(timestamp() + (timezone * 60f32 * 60f32 * 1000f32) as u64)
+    ts_to_time(timestamp() + (timezone * 60f32 * 60f32 * 1000f32) as u64)
 }
 
-pub fn timestamp_to_time(timestamp: u64) -> Time {
+pub fn ts_to_time(timestamp: u64) -> Time {
     let mut time: Time = Time {
         ms: 0,
         sec: 0,
@@ -119,7 +119,7 @@ pub fn timestamp_to_time(timestamp: u64) -> Time {
     time
 }
 
-pub fn time_to_timestamp(time: &Time) -> u64 {
+pub fn time_to_ts(time: &Time) -> u64 {
     let mon_yday = if (time.year) % 4 == 0 && ((time.year) % 100 != 0 || (time.year) % 400 == 0) {
         MON_YDAY[1][(time.month - 1) as usize]
     } else {

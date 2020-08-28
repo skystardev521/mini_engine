@@ -56,7 +56,7 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
                 info!("write data:{} {:?}", msg_num, thread::current().id());
             }
             //if msg_num % 10 == 0{
-                thread::sleep(std::time::Duration::from_millis(1));
+            thread::sleep(std::time::Duration::from_millis(1));
             //}
             if write(&mut client) == false {
                 break;
@@ -91,7 +91,7 @@ fn write(client: &mut TcpSocket<Vec<u8>>) -> bool {
         match client.write() {
             WriteResult::Finish => {
                 //println!("Finish:{}", mini_utils::time::timestamp());
-                
+
                 return true;
             }
             WriteResult::BufferFull => {

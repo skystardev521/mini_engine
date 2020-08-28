@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-  "test",
+  "test_code",
   "mini_utils",
   "mini_socket",
   "mini_proxy",

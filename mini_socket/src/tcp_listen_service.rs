@@ -1,4 +1,4 @@
-use crate::msg_kind::MsgKind;
+use crate::exc_kind::ExcKind;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
 use crate::tcp_buf_rw::ReadResult;
@@ -32,7 +32,7 @@ pub struct TcpListenService<'a, TBRW, MSG> {
     tcp_socket_mgmt: TcpSocketMgmt<MSG>,
     vec_epoll_event: Vec<libc::epoll_event>,
     net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
-    msg_kind_cb_fn: &'a mut dyn Fn(u64, MsgKind),
+    exc_msg_cb_fn: &'a mut dyn Fn(u64, ExcKind),
 }
 
 impl<'a, TBRW, MSG> Drop for TcpListenService<'a, TBRW, MSG> {
@@ -52,7 +52,7 @@ where
     pub fn new(
         config: &'a TcpListenConfig,
         net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
-        msg_kind_cb_fn: &'a mut dyn Fn(u64, MsgKind),
+        exc_msg_cb_fn: &'a mut dyn Fn(u64, ExcKind),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
 
@@ -73,7 +73,7 @@ where
             config,
             tcp_listen,
             net_msg_cb_fn,
-            msg_kind_cb_fn,
+            exc_msg_cb_fn,
             tcp_socket_mgmt,
             phantom: PhantomData,
             vec_share: vec![0u8; vec_share_size],
@@ -127,7 +127,7 @@ where
                 ReadResult::Error(vec_msg, err) => {
                     self.del_tcp_socket(sid);
                     (self.net_msg_cb_fn)(sid, vec_msg);
-                    (self.msg_kind_cb_fn)(sid, MsgKind::SocketClose);
+                    (self.exc_msg_cb_fn)(sid, ExcKind::SocketClose);
                     error!("tcp_socket.read id:{} err:{}", sid, err);
                 }
             }
@@ -143,7 +143,7 @@ where
             Some(tcp_socket) => {
                 if tcp_socket.vec_queue_len() > msg_deque_max_len {
                     info!("sid:{} Msg Queue Is Full", sid);
-                    (self.msg_kind_cb_fn)(sid, MsgKind::MsgQueueIsFull);
+                    (self.exc_msg_cb_fn)(sid, ExcKind::MsgQueueIsFull);
                     return;
                 }
                 tcp_socket.push_vec_queue(msg);
@@ -152,13 +152,13 @@ where
                     if let Err(err) = write_data(&self.os_epoll, sid, tcp_socket) {
                         self.del_tcp_socket(sid);
                         info!("sid:{} write_data  err:{}", sid, err);
-                        (self.msg_kind_cb_fn)(sid, MsgKind::SocketClose);
+                        (self.exc_msg_cb_fn)(sid, ExcKind::SocketClose);
                     }
                 }
             }
             None => {
                 info!("write_net_msg socket id:{} no exitis", sid);
-                (self.msg_kind_cb_fn)(sid, MsgKind::SocketIdNotExist);
+                (self.exc_msg_cb_fn)(sid, ExcKind::SocketIdNotExist);
             }
         }
     }
@@ -168,7 +168,7 @@ where
             if let Err(err) = write_data(&self.os_epoll, sid, tcp_socket) {
                 self.del_tcp_socket(sid);
                 warn!("write_event sid:{} err:{}", sid, err);
-                (self.msg_kind_cb_fn)(sid, MsgKind::SocketClose);
+                (self.exc_msg_cb_fn)(sid, ExcKind::SocketClose);
             }
         } else {
             error!("write_event sid:{} no exist", sid);
@@ -178,7 +178,7 @@ where
     fn error_event(&mut self, sid: u64, err: String) {
         self.del_tcp_socket(sid);
         error!("error_event sid:{} error:{}", sid, err);
-        (self.msg_kind_cb_fn)(sid, MsgKind::SocketClose);
+        (self.exc_msg_cb_fn)(sid, ExcKind::SocketClose);
     }
 
     fn accept_event(&mut self) {
