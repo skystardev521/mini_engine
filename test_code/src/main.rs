@@ -44,8 +44,22 @@ where
         }
     }
 }
+use std::mem::MaybeUninit;
+use std::collections::VecDeque;
+struct tv{
+    t:[VecDeque<usize>;8]
+}
 
 fn main() {
+
+    let t = tv{t:
+        unsafe {
+        MaybeUninit::uninit().assume_init()
+        }
+    };
+
+    let x = &t.t[0];
+
     /*
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());
