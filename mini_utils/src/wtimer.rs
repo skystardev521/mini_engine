@@ -3,35 +3,22 @@ use std::mem::{self,MaybeUninit};
 use std::collections::VecDeque;
 
 
-pub struct TEntity {
-    /// 过期时间
-    pub(crate) expire: u64,
-    /// 运行间隔
-    pub(crate) interval: u64,
-    /// 任务结构体
-    pub(crate) task: Box<dyn TimedTask>,
-}
-/*
-pub struct Timer {
-    pub vec_deque: VecDeque<TEntity>,
-}
-*/
-
 //第1个轮子占用8位
 const TVR_BITS: u64 = 8;
 //第2~5轮子各占用6位
 const TVN_BITS: u64 = 6;
 
-//第1个轮子槽数量为256
-const TVR_SIZE: u64 = (1 << TVR_BITS);
-//第2~5轮子槽数量为64
-const TVN_SIZE: u64 = (1 << TVN_BITS);
+/// 第1个轮子槽数量为256
+const TVR_SIZE: u64 = 1 << TVR_BITS;
 
-//第1个轮子槽0~255
-const TVR_MSAK: u64 = (TVR_SIZE - 1);
+/// 第2~5轮子槽数量为64
+const TVN_SIZE: u64 = 1 << TVN_BITS;
 
-//第2~5轮子槽0~63
-const TVN_MSAK: u64 = (TVN_SIZE - 1);
+/// 第1个轮子槽0~255
+const TVR_MSAK: u64 = TVR_SIZE - 1;
+
+/// 第2~5轮子槽0~63
+const TVN_MSAK: u64 = TVN_SIZE - 1;
 
 macro_rules! tv_idx {
     ($tick:expr, $idx:expr) => {
@@ -43,7 +30,7 @@ macro_rules! cascade {
     ($wheel:expr, $tv:ident, $idx:expr)=>{{
         let mut deque = mem::replace(&mut $wheel.$tv[$idx], VecDeque::new());
         while let Some(entity) = deque.pop_front() {
-            add_entity($wheel, entity);
+            push_entity($wheel, entity);
         }
         $idx > 0
     }}
@@ -52,14 +39,18 @@ macro_rules! cascade {
 pub struct WTimer {
     wheel: Wheel,
 }
-
-impl Drop for WTimer {
-    fn drop(&mut self) {}
-}
-
 pub trait TimedTask {
     /// return true:任务完成
     fn execute(&mut self) -> bool;
+}
+
+pub struct TEntity {
+    /// 过期时间
+    pub(crate) expire: u64,
+    /// 运行间隔
+    pub(crate) interval: u64,
+    /// 任务结构体
+    pub(crate) task: Box<dyn TimedTask>,
 }
 
 struct Wheel {
@@ -74,7 +65,10 @@ struct Wheel {
     tv5: [VecDeque<TEntity>; TVN_SIZE as usize],
 }
 
+
+
 impl WTimer {
+    /// tick_size: tick间隔 单位(毫秒)
     pub fn new(tick_size: u16) -> Self {
         let tick_size:u64 = if tick_size < 1 {
             1
@@ -120,33 +114,34 @@ impl WTimer {
     }
     pub fn scheduled(&mut self, timestamp: u64) {
         
-        let mut w_tick = self.wheel.cur_tick;
-        let cur_tick = timestamp / self.wheel.tick_size;
+        let wheel = &mut self.wheel;
+        let mut w_tick = wheel.cur_tick;
+        let cur_tick = timestamp / wheel.tick_size;
         while w_tick < cur_tick {
             let idx = w_tick & TVR_MSAK;
-            let wheel = &mut self.wheel;
             if idx != 0 &&
                 !cascade!(wheel, tv2, tv_idx!(w_tick, 0)) &&
                 !cascade!(wheel, tv3, tv_idx!(w_tick, 1)) &&
                 !cascade!(wheel, tv4, tv_idx!(w_tick, 2))
             {
-                cascade!(wheel,tv5, tv_idx!(w_tick, 3));
+                cascade!(wheel, tv5, tv_idx!(w_tick, 3));
             }
 
             w_tick += 1;
             wheel.cur_tick = w_tick;
-            let deque = &mut wheel.tv1[idx as usize];
-            while let Some(entity) = &mut deque.pop_front() {
-                if !entity.task.execute() {
-                    entity.expire = timestamp + entity.interval;
-                    add_entity(wheel, entity);
+            let mut deque = mem::replace(&mut wheel.tv1[idx as usize], VecDeque::new());
+            while let Some(mut entity) = deque.pop_front() {
+                if entity.task.execute() {
+                    continue;
                 }
+                entity.expire = timestamp + entity.interval;
+                push_entity(wheel, entity);
             }
         }
         
     }
 
-    pub fn add_task(&mut self, delay: u64, interval: u64, task: Box<dyn TimedTask>) {
+    pub fn push_task(&mut self, delay: u64, interval: u64, task: Box<dyn TimedTask>) {
         let interval = if interval < self.wheel.tick_size{
             self.wheel.tick_size
         }else{
@@ -158,7 +153,7 @@ impl WTimer {
             }
         };
 
-        add_entity(&mut self.wheel, TEntity {
+        push_entity(&mut self.wheel, TEntity {
             task,
             interval,
             expire: time::timestamp() + delay,
@@ -168,7 +163,7 @@ impl WTimer {
 }
 
 
-fn add_entity(wheel: &mut Wheel, entity: TEntity){
+fn push_entity(wheel: &mut Wheel, entity: TEntity){
     let mut ticks = entity.expire / wheel.tick_size;
     let mut idx = (ticks - wheel.cur_tick) as u64;
 
@@ -196,34 +191,42 @@ fn add_entity(wheel: &mut Wheel, entity: TEntity){
             ticks = idx + wheel.cur_tick;
         }
         let i= (ticks >> (TVR_BITS + 3 * TVN_BITS)) & TVN_MSAK;
-        entity_deque = &mut wheel.tv4[i as usize];
+        entity_deque = &mut wheel.tv5[i as usize];
     }
     entity_deque.push_back(entity);
 }
 
 pub struct TestTimedTask {
-    id: u16,
+    pub id: u64,
+    pub name : String,
 }
 
 impl TimedTask for TestTimedTask {
     fn execute(&mut self) -> bool {
-        self.id > 0
+        self.id += 1;
+        if self.id == 1 || self.id % 600 == 0{
+            println!("time:{} id:{} name:{}", time::timestamp(), self.id, self.name);
+        }
+        self.id > 9999999999999
     }
 }
 
-use crate::wtimer;
+
 #[test]
 fn test_timer() {
-    let v = tv_idx!(0, 0);
+    use crate::wtimer::WTimer;
+    let mut wtimer = WTimer::new(1);
 
-    /*
-    let mut wtimer = wtimer::new(1);
+    for i in 0 .. 9{
+        let task = Box::new(
+            TestTimedTask { 
+            id: 0, name: format!("name:{}", i)
+            }
+        );
+        wtimer.push_task(1, 10, task);
+    }
 
-    let task = Box::new(TestTimedTask { id: 1 });
-
-    timer.push_task(1, 10, task);
-
-    timer.execute();
-    */
+    wtimer.scheduled(time::timestamp());
+    
     println!("test_timer finish");
 }

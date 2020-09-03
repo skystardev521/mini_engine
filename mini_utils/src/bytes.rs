@@ -666,10 +666,10 @@ pub fn read_bytes(buffer: &[u8]) -> Vec<u8> {
     result
 }
 
-use crate::bytes;
 
 #[test]
 fn test_bytes() {
+    use crate::bytes;
     let mut buffer = vec![0u8; 16];
     let data_u16: u16 = 1024;
     let u8s = data_u16.to_le_bytes();

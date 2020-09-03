@@ -4,6 +4,9 @@ pub mod test_tcp;
 pub mod wan_buf_rw;
 use std::env;
 
+use mini_utils::wtimer::WTimer;
+use mini_utils::wtimer::TestTimedTask;
+
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,
 }
@@ -52,14 +55,23 @@ struct tv{
 
 fn main() {
 
-    let t = tv{t:
-        unsafe {
-        MaybeUninit::uninit().assume_init()
-        }
-    };
+    let mut wtimer = WTimer::new(1);
 
-    let x = &t.t[0];
-
+    for i in 0 .. 9{
+        println!("name:{}", i);
+        let task = Box::new(
+            TestTimedTask { 
+            id: 0, name: format!("name:{}", i)
+            }
+        );
+        wtimer.push_task(1, 10, task);
+    }
+    
+    loop {
+        //std::thread::sleep(std::time::Duration::from_millis(1));
+        wtimer.scheduled(mini_utils::time::timestamp());
+    }
+    
     /*
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());
@@ -80,7 +92,7 @@ fn main() {
         Err(err) => println!("Logger::init error:{}", err),
     }
 
-    test_tcp::test();
+    //test_tcp::test();
 
     /*
         let mut thread_pool: Vec<thread::JoinHandle<()>> = vec![];
