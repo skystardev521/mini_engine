@@ -666,7 +666,6 @@ pub fn read_bytes(buffer: &[u8]) -> Vec<u8> {
     result
 }
 
-
 #[test]
 fn test_bytes() {
     use crate::bytes;

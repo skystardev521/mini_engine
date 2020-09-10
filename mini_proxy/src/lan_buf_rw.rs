@@ -86,13 +86,13 @@ fn next_id(id: u16) -> u16 {
 */
 
 macro_rules! next_id {
-    ($id:expr)=>{
+    ($id:expr) => {
         if $id == MSG_MAX_ID {
             0
         } else {
             $id + 1
         }
-    }
+    };
 }
 
 #[inline]
@@ -136,9 +136,8 @@ macro_rules! fill_head {
         bytes::write_u64(&mut $buffer[4..], $msg.uid);
         bytes::write_u16(&mut $buffer[12..], $msg.pid);
         bytes::write_u32(&mut $buffer[14..], $msg.ext);
-    }
+    };
 }
-
 
 fn write_data(buffer: &[u8], wsize: &mut usize, socket: &mut TcpStream) -> WriteResult {
     loop {

@@ -4,8 +4,8 @@ pub mod test_tcp;
 pub mod wan_buf_rw;
 use std::env;
 
-use mini_utils::wtimer::WTimer;
 use mini_utils::wtimer::TestTimedTask;
+use mini_utils::wtimer::WTimer;
 
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,
@@ -47,31 +47,29 @@ where
         }
     }
 }
-use std::mem::MaybeUninit;
 use std::collections::VecDeque;
-struct tv{
-    t:[VecDeque<usize>;8]
+use std::mem::MaybeUninit;
+struct tv {
+    t: [VecDeque<usize>; 8],
 }
 
 fn main() {
-
     let mut wtimer = WTimer::new(1);
 
-    for i in 0 .. 9{
+    for i in 0..9 {
         println!("name:{}", i);
-        let task = Box::new(
-            TestTimedTask { 
-            id: 0, name: format!("name:{}", i)
-            }
-        );
+        let task = Box::new(TestTimedTask {
+            id: 0,
+            name: format!("name:{}", i),
+        });
         wtimer.push_task(1, 10, task);
     }
-    
+
     loop {
         //std::thread::sleep(std::time::Duration::from_millis(1));
         wtimer.scheduled(mini_utils::time::timestamp());
     }
-    
+
     /*
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());

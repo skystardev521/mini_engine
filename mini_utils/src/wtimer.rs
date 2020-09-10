@@ -210,23 +210,29 @@ impl TimedTask for TestTimedTask {
         self.id > 9999999999999
     }
 }
-
-
-#[test]
-fn test_timer() {
+#[cfg(test)]
+mod test {
+    use crate::time;
     use crate::wtimer::WTimer;
-    let mut wtimer = WTimer::new(1);
+    use crate::wtimer::TestTimedTask;
 
-    for i in 0 .. 9{
-        let task = Box::new(
-            TestTimedTask { 
-            id: 0, name: format!("name:{}", i)
-            }
-        );
-        wtimer.push_task(1, 10, task);
+    #[test]
+    fn test_timer() {
+
+        let mut wtimer = WTimer::new(1);
+
+        for i in 0 .. 9{
+            let task = Box::new(
+                TestTimedTask { 
+                id: 0, name: format!("name:{}", i)
+                }
+            );
+            wtimer.push_task(1, 10, task);
+        }
+
+        wtimer.scheduled(time::timestamp());
+        
+        println!("test_timer finish");
     }
 
-    wtimer.scheduled(time::timestamp());
-    
-    println!("test_timer finish");
 }
