@@ -21,7 +21,7 @@ pub enum ExcKind {
     /// Socket Id not exist
     SocketIdNotExist = 6,
 
-    SysMsgIdMaxValue = 999,
+    SysMsgIdMaxValue = 255,
 }
 
 /*

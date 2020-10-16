@@ -175,6 +175,24 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}"
-        }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'hiredis-sys'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=hiredis-sys",
+                    "--package=hiredis-sys"
+                ],
+                "filter": {
+                    "name": "hiredis-sys",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
     ]
 }
