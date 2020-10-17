@@ -215,7 +215,7 @@ impl RedisClient {
                     let reply_slice = std::ptr::slice_from_raw_parts((*reply).element, elements);
                     for i in 0 .. elements{
                         let e_reply = (&*reply_slice)[i];
-                        if (*e_reply).type_ as u32 != REDIS_REPLY_INTEGER{
+                        if (*e_reply).type_ as u32 == REDIS_REPLY_INTEGER{
                             vec_i64.push((*e_reply).integer);
                         }
                         freeReplyObject(e_reply as *mut c_void);
@@ -245,8 +245,8 @@ impl RedisClient {
                     let reply_slice = std::ptr::slice_from_raw_parts((*reply).element, elements);
                     for i in 0 .. elements{
                         let e_reply = (&*reply_slice)[i];
-                        if (*e_reply).type_ as u32 != REDIS_REPLY_STATUS{
-                            vec_str.push(CStr::from_ptr((*reply).str_).to_string_lossy().to_string());
+                        if (*e_reply).type_ as u32 == REDIS_REPLY_STRING{
+                            vec_str.push(CStr::from_ptr((*e_reply).str_).to_string_lossy().to_string());
                         }
                         freeReplyObject(e_reply as *mut c_void);
                     }
@@ -286,10 +286,13 @@ fn main() {
                     println!("end ts:{} total:{}", e_ts, e_ts - s_ts);
                     break;
                 }
-                let cmd = format!("get key_ok");
-                match client.redis_cmd_str(cmd) {
+                let cmd = format!("zrevrange test_2017 0 -1 withscores");
+                //let cmd = format!("hmset hkey k1 12345 k2 12345678");
+                
+                match client.redis_cmd_vec_str(cmd) {
+                //match client.redis_cmd_ok(cmd) {
                     Ok(reply_ptr) => {
-                        println!("reply_ptr:{}", reply_ptr)
+                        println!("reply_ptr:{}", reply_ptr.len())
                         /*
                         let cs = unsafe { CStr::from_ptr((*reply_ptr).str_) };
                         println!(
