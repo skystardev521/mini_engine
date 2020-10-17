@@ -6,7 +6,7 @@ fn main() {
     let mut cur_dir = env::current_dir().unwrap();
 
     cur_dir.push("hiredis");
-    
+
     let cur_src_dir = cur_dir.as_path();
 
     println!("cur_src_path={}", cur_src_dir.to_string_lossy());
