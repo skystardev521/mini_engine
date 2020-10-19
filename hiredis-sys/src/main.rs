@@ -1,8 +1,8 @@
 //mod ffi_wrapper;
 //use ffi_wrapper::{add_w, add_v2_w, replace_w};
 
+use std::os::raw::{c_void};
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char,c_void};
 
 mod hiredis;
 
@@ -215,10 +215,16 @@ impl RedisClient {
                     let reply_slice = std::ptr::slice_from_raw_parts((*reply).element, elements);
                     for i in 0 .. elements{
                         let e_reply = (&*reply_slice)[i];
+                        if (*reply).type_ as u32 == REDIS_REPLY_NIL {
+                            freeReplyObject(e_reply as *mut c_void);
+                            //vec_str.push("".into());
+                            continue;
+                        }
                         if (*e_reply).type_ as u32 == REDIS_REPLY_INTEGER{
                             vec_i64.push((*e_reply).integer);
+                            freeReplyObject(e_reply as *mut c_void);
                         }
-                        freeReplyObject(e_reply as *mut c_void);
+                        
                     }
                     freeReplyObject(reply as *mut c_void);
                     return Ok(vec_i64);
@@ -245,10 +251,15 @@ impl RedisClient {
                     let reply_slice = std::ptr::slice_from_raw_parts((*reply).element, elements);
                     for i in 0 .. elements{
                         let e_reply = (&*reply_slice)[i];
+                        if (*reply).type_ as u32 == REDIS_REPLY_NIL {
+                            freeReplyObject(e_reply as *mut c_void);
+                            //vec_str.push("".into());
+                            continue;
+                        }
                         if (*e_reply).type_ as u32 == REDIS_REPLY_STRING{
+                            freeReplyObject(e_reply as *mut c_void);
                             vec_str.push(CStr::from_ptr((*e_reply).str_).to_string_lossy().to_string());
                         }
-                        freeReplyObject(e_reply as *mut c_void);
                     }
                     freeReplyObject(reply as *mut c_void);
                     return Ok(vec_str);
@@ -308,26 +319,4 @@ fn main() {
         }
         Err(err) => println!("connect err:{}", err),
     }
-
-    /*
-    println!("{}+ {} = {}", 3, 5, add_w(3, 5));
-
-    let mut s: [u8;3] = [0u8;3];
-
-    let mut d: [u8;3] = [0u8;3];
-
-    println!("s:{:?}\nd:{:?}", s, d);
-
-    replace_w(&mut s,&mut d);
-
-    println!("s:{:?}\nd:{:?}", s, d);
-
-
-
-    let ref mut sum: i32 = 0;
-
-    add_v2_w(3, 5, sum);
-
-    println!("{}+ {} = {}", 3, 5, sum);
-    */
 }
