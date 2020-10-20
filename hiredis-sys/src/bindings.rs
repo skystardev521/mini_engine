@@ -62,35 +62,62 @@ pub type __time_t = ::std::os::raw::c_long;
 pub type __suseconds_t = ::std::os::raw::c_long;
 
 extern "C" {
+    
     pub fn redisFree(c: *mut redisContext);
-}
-extern "C" {
-    pub fn freeReplyObject(reply: *mut ::std::os::raw::c_void);
-}
 
-extern "C" {
+    pub fn freeReplyObject(reply: *mut ::std::os::raw::c_void);
+
+    #[allow(dead_code)]
+    pub fn redisGetReply(
+        c: *mut redisContext,
+        reply: *mut *mut ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_int;
+
     #[allow(dead_code)]
     pub fn redisConnect(
         ip: *const ::std::os::raw::c_char,
         port: ::std::os::raw::c_int,
     ) -> *mut redisContext;
-}
 
-extern "C" {
     #[allow(dead_code)]
     pub fn redisConnectWithTimeout(
         ip: *const ::std::os::raw::c_char,
         port: ::std::os::raw::c_int,
         tv: timeval,
     ) -> *mut redisContext;
-}
 
-extern "C" {
+    #[allow(dead_code)]
+    pub fn redisConnectUnix(path: *const ::std::os::raw::c_char) -> *mut redisContext;
+
+    #[allow(dead_code)]
+    pub fn redisConnectUnixWithTimeout(
+        path: *const ::std::os::raw::c_char,
+        tv: timeval,
+    ) -> *mut redisContext;
+    
+    #[allow(dead_code)]
+    pub fn redisReconnect(c: *mut redisContext) -> ::std::os::raw::c_int;
+
+    #[allow(dead_code)]
+    pub fn redisSetTimeout(c: *mut redisContext, tv: timeval) -> ::std::os::raw::c_int;
+
+    #[allow(dead_code)]
+    pub fn redisEnableKeepAlive(c: *mut redisContext) -> ::std::os::raw::c_int;
+    
+    #[allow(dead_code)]
     pub fn redisCommand(
         c: *mut redisContext,
         format: *const ::std::os::raw::c_char,
         ...
     ) -> *mut ::std::os::raw::c_void;
+
+    #[allow(dead_code)]
+    pub fn redisAppendCommand(
+        c: *mut redisContext,
+        format: *const ::std::os::raw::c_char,
+        ...
+    ) -> ::std::os::raw::c_int;
+    
 }
 
 #[repr(C)]
