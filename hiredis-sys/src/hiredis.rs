@@ -1,260 +1,324 @@
-//use hiredis::{freeReplyObject, redisFree};
-//use hiredis::{redisContext, redisReply, timeval};
-//use hiredis::{redisCommand, redisConnect, redisConnectWithTimeout};
-//use hiredis::{REDIS_OK, REDIS_REPLY_STATUS , REDIS_REPLY_NIL, REDIS_REPLY_INTEGER, REDIS_REPLY_STRING ,REDIS_REPLY_ARRAY,REDIS_REPLY_ERROR};
+//mod ffi_wrapper;
+//use ffi_wrapper::{add_w, add_v2_w, replace_w};
 
-#[allow(dead_code)]
-pub const REDIS_ERR: i32 = -1;
-#[allow(dead_code)]
-pub const REDIS_OK: u32 = 0;
-#[allow(dead_code)]
-pub const REDIS_ERR_IO: u32 = 1;
-#[allow(dead_code)]
-pub const REDIS_ERR_EOF: u32 = 3;
-#[allow(dead_code)]
-pub const REDIS_ERR_PROTOCOL: u32 = 4;
-#[allow(dead_code)]
-pub const REDIS_ERR_OOM: u32 = 5;
-#[allow(dead_code)]
-pub const REDIS_ERR_TIMEOUT: u32 = 6;
-#[allow(dead_code)]
-pub const REDIS_ERR_OTHER: u32 = 2;
-#[allow(dead_code)]
-pub const REDIS_REPLY_STRING: u32 = 1;
-#[allow(dead_code)]
-pub const REDIS_REPLY_ARRAY: u32 = 2;
-#[allow(dead_code)]
-pub const REDIS_REPLY_INTEGER: u32 = 3;
-#[allow(dead_code)]
-pub const REDIS_REPLY_NIL: u32 = 4;
-#[allow(dead_code)]
-pub const REDIS_REPLY_STATUS: u32 = 5;
-#[allow(dead_code)]
-pub const REDIS_REPLY_ERROR: u32 = 6;
-#[allow(dead_code)]
-pub const REDIS_REPLY_DOUBLE: u32 = 7;
-#[allow(dead_code)]
-pub const REDIS_REPLY_BOOL: u32 = 8;
-#[allow(dead_code)]
-pub const REDIS_REPLY_MAP: u32 = 9;
-#[allow(dead_code)]
-pub const REDIS_REPLY_SET: u32 = 10;
-#[allow(dead_code)]
-pub const REDIS_REPLY_ATTR: u32 = 11;
-#[allow(dead_code)]
-pub const REDIS_REPLY_PUSH: u32 = 12;
-#[allow(dead_code)]
-pub const REDIS_REPLY_BIGNUM: u32 = 13;
-#[allow(dead_code)]
-pub const REDIS_REPLY_VERB: u32 = 14;
+use std::ptr::slice_from_raw_parts;
+use std::os::raw::{c_char,c_void};
+use std::ffi::{CStr, CString};
 
-#[allow(non_camel_case_types)]
-pub type redisFD = ::std::os::raw::c_int;
-#[allow(non_camel_case_types)]
-pub type size_t = ::std::os::raw::c_ulong;
-#[allow(non_camel_case_types)]
-pub type ssize_t = ::std::os::raw::c_long;
-#[allow(non_camel_case_types)]
-pub type redisConnectionType = ::std::os::raw::c_uint;
-#[allow(non_camel_case_types)]
-pub type __time_t = ::std::os::raw::c_long;
-#[allow(non_camel_case_types)]
-pub type __suseconds_t = ::std::os::raw::c_long;
+use crate::bindings::{freeReplyObject, redisFree};
+use crate::bindings::{redisContext, redisReply, timeval};
+use crate::bindings::{redisCommand, redisConnect, redisConnectWithTimeout};
+use crate::bindings::{REDIS_OK, REDIS_REPLY_STATUS , REDIS_REPLY_NIL, REDIS_REPLY_INTEGER, REDIS_REPLY_STRING ,REDIS_REPLY_ARRAY,REDIS_REPLY_ERROR};
 
-extern "C" {
-    pub fn redisFree(c: *mut redisContext);
-}
-extern "C" {
-    pub fn freeReplyObject(reply: *mut ::std::os::raw::c_void);
+#[macro_export]
+macro_rules! test_fmt {
+    ($fmt:expr, $($arg:expr),+ ) => {
+        println!($fmt,
+            $(
+                {
+                    $arg
+                },
+            )+
+        );
+    };
 }
 
-extern "C" {
+struct RedisClient {
+    ctx_ptr: *mut redisContext,
+}
+
+impl Drop for RedisClient {
+    fn drop(&mut self) {
+        println!("start drop RedisClient");
+        if !self.ctx_ptr.is_null() {
+            unsafe {
+                redisFree(self.ctx_ptr);
+            }
+        }
+        println!("end drop RedisClient");
+    }
+}
+
+impl RedisClient {
+
+    fn ms_to_tv(ms: i64)->timeval{
+        let tv_sec = (ms / 1000) as i64;
+        let tv_usec = ((ms % 1000) * 1000) as i64;
+        timeval {
+                    tv_sec,
+                    tv_usec
+                }
+    }
+    fn c_char_ptr_to_string(c_char_ptr: * const c_char)->String{
+        unsafe{CStr::from_ptr(c_char_ptr).to_string_lossy().to_string()}
+    }
+    /// let em_reply_ptr: *mut T;
+    /// Self::free_reply_object(em_reply_ptr as *mut _ as * mut c_void);
+    fn free_reply_object(reply_ptr: *mut c_void){
+        if reply_ptr.is_null(){
+            return;
+        }
+        unsafe{freeReplyObject(reply_ptr)}
+    }
+
     #[allow(dead_code)]
-    pub fn redisConnect(
-        ip: *const ::std::os::raw::c_char,
-        port: ::std::os::raw::c_int,
-    ) -> *mut redisContext;
-}
+    pub fn redis_connect(ip: String, port: i32) -> Result<RedisClient, String> {
+        match CString::new(ip) {
+            Ok(c_ip) => {
+                let ctx_ptr = unsafe { redisConnect(c_ip.as_ptr(), port) };
+                if ctx_ptr.is_null() {
+                    return Err("null ptr".into());
+                }
+                if unsafe { *ctx_ptr }.err as u32 != REDIS_OK {
+                    let c_ptr= unsafe{(*ctx_ptr).errstr.as_ptr()};
+                    return Err(Self::c_char_ptr_to_string(c_ptr));
+                }
+                return Ok(RedisClient { ctx_ptr });
+            }
+            Err(nul_err) => {
+                return Err(format!(
+                    "redis ip to CString Error:{}",
+                    nul_err.to_string()
+                ))
+            }
+        }
+    }
 
-extern "C" {
+    /// timeout ms
     #[allow(dead_code)]
-    pub fn redisConnectWithTimeout(
-        ip: *const ::std::os::raw::c_char,
-        port: ::std::os::raw::c_int,
-        tv: timeval,
-    ) -> *mut redisContext;
+    fn redis_connect_timeout(
+        ip: String,
+        port: i32,
+        timeout: u32,
+    ) -> Result<RedisClient, String> {
+        match CString::new(ip) {
+            Ok(c_ip) => {
+                let tv = Self::ms_to_tv(timeout as i64);
+                let ctx_ptr = unsafe { redisConnectWithTimeout(c_ip.as_ptr(), port, tv) };
+                if ctx_ptr.is_null() {
+                    return Err("null ptr".into());
+                }
+                if unsafe { *ctx_ptr }.err as u32 != REDIS_OK {
+                    let c_ptr= unsafe{(*ctx_ptr).errstr.as_ptr()};
+                    return Err(Self::c_char_ptr_to_string(c_ptr));
+                }
+                return Ok(RedisClient { ctx_ptr });
+            }
+            Err(nul_err) => {
+                return Err(format!(
+                    "redis ip to CString Error:{}",
+                    nul_err.to_string()
+                ))
+            }
+        }
+    }
+    #[allow(dead_code)]
+    pub fn redis_command(&self, cmd: String) -> Result<*mut c_void, String> {
+        match CString::new(cmd) {
+            Ok(c_cmd) =>{ 
+                    let reply_ptr = unsafe {redisCommand(self.ctx_ptr, c_cmd.as_ptr())};
+                    if reply_ptr.is_null() {
+                        return Err("result is null".into());
+                    }
+                    let reply_st = unsafe{&mut *(reply_ptr as *mut redisReply)};
+                    if reply_st.type_ as u32 == REDIS_REPLY_ERROR {
+                        if reply_st.str_.is_null() {
+                            Self::free_reply_object(reply_ptr);
+                            return Err("REDIS_REPLY_ERROR NULL".into());
+                        }else
+                        {
+                            let reason= Self::c_char_ptr_to_string(reply_st.str_);
+                            Self::free_reply_object(reply_ptr);
+                            return Err(reason);
+                        }
+                    }
+                    return Ok(reply_ptr);
+            },
+            Err(nul_err) => {
+                return Err(format!(
+                    "redis cmd to CString Error:{}",
+                    nul_err.to_string()
+                ));
+            }
+        }
+    }
+    #[allow(dead_code)]
+    pub fn redis_cmd_i64(&self, cmd: String)->Result<i64, String>{
+        match self.redis_command(cmd){
+            Ok(reply_ptr)=>{
+                let reply_st = unsafe{&mut *(reply_ptr as *mut redisReply)};
+                    if reply_st.type_ as u32 == REDIS_REPLY_NIL {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("REDIS_REPLY_NIL".into());
+                    }
+                    if reply_st.type_ as u32 != REDIS_REPLY_INTEGER{
+                        Self::free_reply_object(reply_ptr);
+                        return Err("reply type error".into())
+                    }
+                    let value = reply_st.integer;
+                    Self::free_reply_object(reply_ptr);
+                    return Ok(value)
+            }
+            Err(err)=> return Err(err)
+        }
+    }
+    #[allow(dead_code)]
+    pub fn redis_cmd_ok(&self, cmd: String)->Result<bool, String>{
+        match self.redis_command(cmd){
+            Ok(reply_ptr)=>{
+                let reply_st = unsafe{&mut *(reply_ptr as *mut redisReply)};
+                    if reply_st.type_ as u32 == REDIS_REPLY_NIL {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("REDIS_REPLY_NIL".into());
+                    }
+                    if reply_st.type_ as u32 != REDIS_REPLY_STATUS {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("reply type error".into());
+                    }
+                    let str_ptr = unsafe{CStr::from_ptr(reply_st.str_)};
+                    if str_ptr.to_bytes() == b"OK"{
+                        Self::free_reply_object(reply_ptr);
+                        return Ok(true);
+                    }
+                    Self::free_reply_object(reply_ptr);
+                    return Err(str_ptr.to_string_lossy().to_string());
+            }
+            Err(err)=> return Err(err)
+        }
+    }
+    #[allow(dead_code)]
+    pub fn redis_cmd_str(&self, cmd: String)->Result<String, String>{
+        match self.redis_command(cmd){
+            Ok(reply_ptr)=>{
+                let reply_st = unsafe{&mut *(reply_ptr as *mut redisReply)};
+                    if reply_st.type_ as u32 == REDIS_REPLY_NIL {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("REDIS_REPLY_NIL".into());
+                    }
+                    if reply_st.type_ as u32 != REDIS_REPLY_STRING {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("reply type error".into());
+                    }
+                    let result = Self::c_char_ptr_to_string(reply_st.str_);
+                    Self::free_reply_object(reply_ptr);
+                    return Ok(result);
+            }
+            Err(err)=> return Err(err)
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn redis_cmd_vec_i64(&self, cmd: String)->Result<Vec<i64>, String>{
+        match self.redis_command(cmd){
+            Ok(reply_ptr)=>{
+                let reply_st = unsafe{& *(reply_ptr as *mut redisReply)};
+                    if reply_st.type_ as u32 == REDIS_REPLY_NIL {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("REDIS_REPLY_NIL".into());
+                    }
+                    if reply_st.type_ as u32 != REDIS_REPLY_ARRAY {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("reply type error".into());
+                    }
+                    let mut result_vec_i64 = Vec::new();
+                    let elements = reply_st.elements as usize;
+                    let slice_reply = slice_from_raw_parts(reply_st.element, elements);
+                    for i in 0 .. elements{
+                        let em_reply_st = unsafe{&*(&*slice_reply)[i]};
+                        if em_reply_st.type_ as u32 == REDIS_REPLY_NIL {
+                            continue;
+                        }
+                        if em_reply_st.type_ as u32 == REDIS_REPLY_INTEGER{
+                            result_vec_i64.push(em_reply_st.integer);
+                        }
+                    }
+                    Self::free_reply_object(reply_ptr);
+                    return Ok(result_vec_i64);
+            }
+            Err(err)=> return Err(err)
+        }
+    }
+    #[allow(dead_code)]
+    pub fn redis_cmd_vec_str(&self, cmd: String)->Result<Vec<String>, String>{
+        match self.redis_command(cmd){
+            Ok(reply_ptr)=>{
+                let reply = unsafe{& *(reply_ptr as *mut redisReply)};
+                    if reply.type_ as u32 == REDIS_REPLY_NIL {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("REDIS_REPLY_NIL".into());
+                    }
+                    if reply.type_ as u32 != REDIS_REPLY_ARRAY {
+                        Self::free_reply_object(reply_ptr);
+                        return Err("reply type error".into());
+                    }
+                    let mut result_vec_str = Vec::new();
+                    let elements = (*reply).elements as usize;
+                    let slice_reply = std::ptr::slice_from_raw_parts((*reply).element, elements);
+                    for i in 0 .. elements{
+                        let em_reply_st = unsafe{&* (&*slice_reply)[i]};
+                        if em_reply_st.type_ as u32 == REDIS_REPLY_NIL {
+                            continue;
+                        }
+                        if em_reply_st.type_ as u32 == REDIS_REPLY_STRING{
+                            result_vec_str.push(Self::c_char_ptr_to_string(em_reply_st.str_));
+                        }
+                    }
+                    Self::free_reply_object(reply_ptr);
+                    return Ok(result_vec_str);
+            }
+            Err(err)=> return Err(err)
+        }
+    }
 }
 
-extern "C" {
-    pub fn redisCommand(
-        c: *mut redisContext,
-        format: *const ::std::os::raw::c_char,
-        ...
-    ) -> *mut ::std::os::raw::c_void;
+
+fn timestamp() -> u64 {
+    let now = std::time::SystemTime::now();
+    match now.duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis() as u64,
+        Err(_) => 0,
+    }
 }
 
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct timeval {
-    pub tv_sec: __time_t,
-    pub tv_usec: __suseconds_t,
-}
+#[test]
+pub fn test_redis_client() {
+    test_fmt!("test_fmt:{} {} {}", "a", "b", "c");
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct redisReply {
-    pub type_: ::std::os::raw::c_int,
-    pub integer: ::std::os::raw::c_longlong,
-    pub dval: f64,
-    pub len: size_t,
-    pub str_: *mut ::std::os::raw::c_char,
-    pub vtype: [::std::os::raw::c_char; 4usize],
-    pub elements: size_t,
-    pub element: *mut *mut redisReply,
-}
+    match RedisClient::redis_connect_timeout(String::from("127.0.0.1"), 6379, 1000) {
+        Ok(client) => {
+            let mut n = 0;
+            let s_ts = timestamp();
+            println!("start ts:{}", s_ts);
+            loop {
+                n += 1;
+                if n == 2 {
+                    let e_ts = timestamp();
+                    println!("end ts:{} total:{}", e_ts, e_ts - s_ts);
+                    break;
+                }
+                let cmd = format!("HGETALL runoobkey");
+                //let cmd = format!("hmset hkey k1 12345 k2 12345678");
+                
+                match client.redis_cmd_vec_str(cmd) {
+                    Ok(vec_str) => {
+                        println!("reply_ptr:{:?}", vec_str)
+                        /*
+                        let cs = unsafe { CStr::from_ptr((*reply_ptr).str_) };
+                        println!(
+                            "cmd:{}, reply:{}",
+                            "set key_ok val_ok",
+                            cs.to_string_lossy().to_string()
+                        );
+                        */
+                    }
+                    Err(err) => println!("redis_command err:{}", err),
+                }
+                
 
-#[allow(non_snake_case)]
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct redisReplyObjectFunctions {
-    pub createString: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *const redisReadTask,
-            arg2: *mut ::std::os::raw::c_char,
-            arg3: size_t,
-        ) -> *mut ::std::os::raw::c_void,
-    >,
-    pub createArray: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *const redisReadTask,
-            arg2: size_t,
-        ) -> *mut ::std::os::raw::c_void,
-    >,
-    pub createInteger: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *const redisReadTask,
-            arg2: ::std::os::raw::c_longlong,
-        ) -> *mut ::std::os::raw::c_void,
-    >,
-    pub createDouble: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *const redisReadTask,
-            arg2: f64,
-            arg3: *mut ::std::os::raw::c_char,
-            arg4: size_t,
-        ) -> *mut ::std::os::raw::c_void,
-    >,
-    pub createNil: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *const redisReadTask) -> *mut ::std::os::raw::c_void,
-    >,
-    pub createBool: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *const redisReadTask,
-            arg2: ::std::os::raw::c_int,
-        ) -> *mut ::std::os::raw::c_void,
-    >,
-
-    pub freeObject: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct redisReadTask {
-    pub type_: ::std::os::raw::c_int,
-    pub elements: ::std::os::raw::c_longlong,
-    pub idx: ::std::os::raw::c_int,
-    pub obj: *mut ::std::os::raw::c_void,
-    pub parent: *mut redisReadTask,
-    pub privdata: *mut ::std::os::raw::c_void,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct redisReader {
-    pub err: ::std::os::raw::c_int,
-    pub errstr: [::std::os::raw::c_char; 128usize],
-    pub buf: *mut ::std::os::raw::c_char,
-    pub pos: size_t,
-    pub len: size_t,
-    pub maxbuf: size_t,
-    pub maxelements: ::std::os::raw::c_longlong,
-    pub task: *mut *mut redisReadTask,
-    pub tasks: ::std::os::raw::c_int,
-    pub ridx: ::std::os::raw::c_int,
-    pub reply: *mut ::std::os::raw::c_void,
-    pub fn_: *mut redisReplyObjectFunctions,
-    pub privdata: *mut ::std::os::raw::c_void,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct sockaddr {
-    pub _address: u8,
-}
-
-#[allow(non_camel_case_types)]
-pub type redisPushFn = ::std::option::Option<
-    unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void, arg2: *mut ::std::os::raw::c_void),
->;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct redisContext {
-    pub funcs: *const redisContextFuncs,
-    pub err: ::std::os::raw::c_int,
-    pub errstr: [::std::os::raw::c_char; 128usize],
-    pub fd: redisFD,
-    pub flags: ::std::os::raw::c_int,
-    pub obuf: *mut ::std::os::raw::c_char,
-    pub reader: *mut redisReader,
-    pub connection_type: redisConnectionType,
-    pub connect_timeout: *mut timeval,
-    pub command_timeout: *mut timeval,
-    pub tcp: redisContext__bindgen_ty_1,
-    pub unix_sock: redisContext__bindgen_ty_2,
-    pub saddr: *mut sockaddr,
-    pub addrlen: size_t,
-    pub privdata: *mut ::std::os::raw::c_void,
-    pub free_privdata:
-        ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-    pub privctx: *mut ::std::os::raw::c_void,
-    pub push_cb: redisPushFn,
-}
-
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct redisAsyncContext {
-    _unused: [u8; 0],
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct redisContextFuncs {
-    pub free_privctx:
-        ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-    pub async_read: ::std::option::Option<unsafe extern "C" fn(arg1: *mut redisAsyncContext)>,
-    pub async_write: ::std::option::Option<unsafe extern "C" fn(arg1: *mut redisAsyncContext)>,
-    pub read: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *mut redisContext,
-            arg2: *mut ::std::os::raw::c_char,
-            arg3: size_t,
-        ) -> ssize_t,
-    >,
-    pub write: ::std::option::Option<unsafe extern "C" fn(arg1: *mut redisContext) -> ssize_t>,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct redisContext__bindgen_ty_1 {
-    pub host: *mut ::std::os::raw::c_char,
-    pub source_addr: *mut ::std::os::raw::c_char,
-    pub port: ::std::os::raw::c_int,
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct redisContext__bindgen_ty_2 {
-    pub path: *mut ::std::os::raw::c_char,
+            }
+        }
+        Err(err) => println!("connect err:{}", err),
+    }
+    
 }
