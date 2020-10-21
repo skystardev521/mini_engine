@@ -1,51 +1,49 @@
-//use hiredis::{freeReplyObject, redisFree};
-//use hiredis::{redisContext, redisReply, timeval};
-//use hiredis::{redisCommand, redisConnect, redisConnectWithTimeout};
-//use hiredis::{REDIS_OK, REDIS_REPLY_STATUS , REDIS_REPLY_NIL, REDIS_REPLY_INTEGER, REDIS_REPLY_STRING ,REDIS_REPLY_ARRAY,REDIS_REPLY_ERROR};
 
-#[allow(dead_code)]
+#![allow(dead_code, non_camel_case_types, non_snake_case, non_upper_case_globals)]
+
+
 pub const REDIS_ERR: i32 = -1;
-#[allow(dead_code)]
+
 pub const REDIS_OK: u32 = 0;
-#[allow(dead_code)]
+
 pub const REDIS_ERR_IO: u32 = 1;
-#[allow(dead_code)]
+
 pub const REDIS_ERR_EOF: u32 = 3;
-#[allow(dead_code)]
+
 pub const REDIS_ERR_PROTOCOL: u32 = 4;
-#[allow(dead_code)]
+
 pub const REDIS_ERR_OOM: u32 = 5;
-#[allow(dead_code)]
+
 pub const REDIS_ERR_TIMEOUT: u32 = 6;
-#[allow(dead_code)]
+
 pub const REDIS_ERR_OTHER: u32 = 2;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_STRING: u32 = 1;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_ARRAY: u32 = 2;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_INTEGER: u32 = 3;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_NIL: u32 = 4;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_STATUS: u32 = 5;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_ERROR: u32 = 6;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_DOUBLE: u32 = 7;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_BOOL: u32 = 8;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_MAP: u32 = 9;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_SET: u32 = 10;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_ATTR: u32 = 11;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_PUSH: u32 = 12;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_BIGNUM: u32 = 13;
-#[allow(dead_code)]
+
 pub const REDIS_REPLY_VERB: u32 = 14;
 
 #[allow(non_camel_case_types)]
@@ -67,51 +65,51 @@ extern "C" {
 
     pub fn freeReplyObject(reply: *mut ::std::os::raw::c_void);
 
-    #[allow(dead_code)]
+    
     pub fn redisGetReply(
         c: *mut redisContext,
         reply: *mut *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 
-    #[allow(dead_code)]
+    
     pub fn redisConnect(
         ip: *const ::std::os::raw::c_char,
         port: ::std::os::raw::c_int,
     ) -> *mut redisContext;
 
-    #[allow(dead_code)]
+    
     pub fn redisConnectWithTimeout(
         ip: *const ::std::os::raw::c_char,
         port: ::std::os::raw::c_int,
         tv: timeval,
     ) -> *mut redisContext;
 
-    #[allow(dead_code)]
+    
     pub fn redisConnectUnix(path: *const ::std::os::raw::c_char) -> *mut redisContext;
 
-    #[allow(dead_code)]
+    
     pub fn redisConnectUnixWithTimeout(
         path: *const ::std::os::raw::c_char,
         tv: timeval,
     ) -> *mut redisContext;
     
-    #[allow(dead_code)]
+    
     pub fn redisReconnect(c: *mut redisContext) -> ::std::os::raw::c_int;
 
-    #[allow(dead_code)]
+    
     pub fn redisSetTimeout(c: *mut redisContext, tv: timeval) -> ::std::os::raw::c_int;
 
-    #[allow(dead_code)]
-    pub fn redisEnableKeepAlive(c: *mut redisContext) -> ::std::os::raw::c_int;
     
-    #[allow(dead_code)]
+    pub fn redisEnableKeepAlive(c: *mut redisContext) -> ::std::os::raw::c_int;
+
+    
     pub fn redisCommand(
         c: *mut redisContext,
         format: *const ::std::os::raw::c_char,
         ...
     ) -> *mut ::std::os::raw::c_void;
 
-    #[allow(dead_code)]
+    
     pub fn redisAppendCommand(
         c: *mut redisContext,
         format: *const ::std::os::raw::c_char,
@@ -140,7 +138,7 @@ pub struct redisReply {
     pub element: *mut *mut redisReply,
 }
 
-#[allow(non_snake_case)]
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct redisReplyObjectFunctions {

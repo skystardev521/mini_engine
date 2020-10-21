@@ -1,4 +1,5 @@
 
+/*
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::ptr::slice_from_raw_parts;
@@ -367,3 +368,4 @@ pub fn test_redis_client() {
         Err(err) => println!("connect err:{}", err),
     }
 }
+*/

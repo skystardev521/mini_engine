@@ -7,6 +7,8 @@ use std::env;
 use mini_utils::wtimer::TestTimedTask;
 use mini_utils::wtimer::WTimer;
 
+use hiredis_sys::RedisClient;
+
 pub struct ThreadPool {
     //handlers: Vec<thread::JoinHandle<()>>,
 }
@@ -53,7 +55,37 @@ struct tv {
     t: [VecDeque<usize>; 8],
 }
 
+pub fn test_redis_client() {
+    //test_fmt!("test_fmt:{} {} {}", "a", "b", "c");
+
+    match RedisClient::redis_connect_timeout(String::from("127.0.0.1"), 6379, 1000) {
+        Ok(client) => {
+            let mut n = 0;
+            loop {
+                n += 1;
+                if n == 10 {
+                    break;
+                }
+                let cmd = format!("HGETALL runoobkey");
+                //let cmd = format!("hmset hkey k1 12345 k2 12345678");
+
+                match client.redis_cmd_vec_str(cmd) {
+                    Ok(vec_str) => {
+                        println!("reply_ptr:{:?}", vec_str)
+                    }
+                    Err(err) => println!("redis_command err:{}", err),
+                }
+            }
+        }
+        Err(err) => println!("connect err:{}", err),
+    }
+}
+
+
 fn main() {
+
+    test_redis_client();
+
     let mut wtimer = WTimer::new(1);
 
     for i in 0..9 {
