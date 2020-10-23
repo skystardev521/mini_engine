@@ -1,7 +1,7 @@
 //use std::thread;
 use mini_utils::logger::Logger;
 pub mod test_tcp;
-pub mod wan_buf_rw;
+pub mod wan_tcp_rw;
 use std::env;
 
 use mini_utils::wtimer::TestTimedTask;
@@ -70,9 +70,7 @@ pub fn test_redis_client() {
                 //let cmd = format!("hmset hkey k1 12345 k2 12345678");
 
                 match client.redis_cmd_vec_str(cmd) {
-                    Ok(vec_str) => {
-                        println!("reply_ptr:{:?}", vec_str)
-                    }
+                    Ok(vec_str) => println!("reply_ptr:{:?}", vec_str),
                     Err(err) => println!("redis_command err:{}", err),
                 }
             }

@@ -1,8 +1,7 @@
-use crate::lan_buf_rw::LanBufRw;
-use crate::net_message::LanMsgEnum;
-use crate::net_message::LanMsgKind;
-use crate::net_message::LanNetMsg;
-use mini_socket::msg_kind::MsgKind;
+use crate::lan_tcp_rw::LanTcpRw;
+use crate::head_proto::lan::{MsgEnum,NetMsg};
+
+use mini_socket::exc_kind::ExcKind;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
 use mini_utils::worker_config::WorkerConfig;
@@ -19,7 +18,7 @@ use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
 pub struct LanService {
-    worker: Worker<LanMsgEnum, ()>,
+    worker: Worker<MsgEnum, ()>,
 }
 
 impl LanService {
@@ -38,7 +37,7 @@ impl LanService {
     }
 
     #[inline]
-    pub fn receiver(&self) -> Option<LanMsgEnum> {
+    pub fn receiver(&self) -> Option<MsgEnum> {
         match self.worker.receiver() {
             RecvResEnum::Empty => return None,
             RecvResEnum::Data(lan_msg) => return Some(lan_msg),
@@ -49,7 +48,7 @@ impl LanService {
         }
     }
     #[inline]
-    pub fn sender(&self, msg: LanMsgEnum) -> bool {
+    pub fn sender(&self, msg: MsgEnum) -> bool {
         match self.worker.sender(msg) {
             SendResEnum::Success => {
                 return true;
@@ -68,13 +67,13 @@ impl LanService {
 #[allow(dead_code)]
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
-) -> Box<dyn FnOnce(Receiver<LanMsgEnum>, SyncSender<LanMsgEnum>) + Send> {
+) -> Box<dyn FnOnce(Receiver<MsgEnum>, SyncSender<MsgEnum>) + Send> {
     Box::new(
-        move |receiver: Receiver<LanMsgEnum>, sender: SyncSender<LanMsgEnum>| {
+        move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<LanNetMsg>| {
+            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<NetMsg>| {
                 for msg in vec_msg {
-                    match sender.try_send(LanMsgEnum::NetMsg(sid, msg)) {
+                    match sender.try_send(MsgEnum::NetMsg(sid, msg)) {
                         Ok(_) => {}
                         Err(TrySendError::Full(_)) => {
                             error!("LanService try_send Full");
@@ -85,8 +84,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |sid: u64, kind: MsgKind| {
-                match sender.try_send(LanMsgEnum::MsgKind(sid, LanMsgKind { sid, kind })) {
+            let mut msg_kind_cb_fn = |sid: u64, ekd: ExcKind| {
+                match sender.try_send(MsgEnum::ExcMsg(sid, ekd)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("LanService try_send Full");
@@ -97,7 +96,7 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_listen_service: TcpListenService<LanBufRw, LanNetMsg>;
+            let mut tcp_listen_service: TcpListenService<LanTcpRw, NetMsg>;
             match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut msg_kind_cb_fn)
             {
                 Ok(service) => {
@@ -129,11 +128,11 @@ fn worker_closure(
                 //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(LanMsgEnum::NetMsg(sid, net_msg)) => {
+                        Ok(MsgEnum::NetMsg(sid, msg)) => {
                             //这里要优化 判断是否广播消息
-                            tcp_listen_service.write_net_msg(sid, net_msg);
+                            tcp_listen_service.write_net_msg(sid, msg);
                         }
-                        Ok(LanMsgEnum::MsgKind(_sid, _err_msg)) => {}
+                        Ok(MsgEnum::ExcMsg(_sid, _ekd)) => {}
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Disconnected) => {
                             error!("LanService receiver.try_recv:Disconnected");

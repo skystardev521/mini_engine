@@ -1,8 +1,8 @@
 use log::{error, info, warn};
 
-use mini_socket::tcp_buf_rw::ReadResult;
-use mini_socket::tcp_buf_rw::WriteResult;
 use mini_socket::tcp_socket::TcpSocket;
+use mini_socket::tcp_socket_rw::ReadResult;
+use mini_socket::tcp_socket_rw::WriteResult;
 use mini_utils::bytes;
 
 use std::net::Shutdown;
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use mini_utils::time;
 
-use crate::wan_buf_rw::WanBufRw;
+use crate::wan_tcp_rw::WanTcpRw;
 
 const LOG_FILE_DURATION: u64 = 60 * 60 * 1000;
 
@@ -38,8 +38,8 @@ pub fn test() {
 
 fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let wan_buf_rw = Box::new(WanBufRw::default());
-        let mut client = TcpSocket::new(socket, wan_buf_rw);
+        let wan_tcp_rw = Box::new(WanTcpRw::default());
+        let mut client = TcpSocket::new(socket, wan_tcp_rw);
         info!("client-->{:?}", std::thread::current().id());
         let mut msg_num: u64 = 0;
 
@@ -110,8 +110,8 @@ fn write(client: &mut TcpSocket<Vec<u8>>) -> bool {
 fn loop_read(socket: TcpStream) -> thread::JoinHandle<()> {
     thread::spawn(move || loop {
         let socket = socket.try_clone().unwrap();
-        let wan_buf_rw = Box::new(WanBufRw::default());
-        let mut client = TcpSocket::new(socket, wan_buf_rw);
+        let wan_tcp_rw = Box::new(WanTcpRw::default());
+        let mut client = TcpSocket::new(socket, wan_tcp_rw);
         if read(&mut client) == false {
             break;
         }

@@ -1,9 +1,9 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
-use crate::net_message::LanMsgEnum;
-use crate::net_message::LanMsgKind;
-use crate::net_message::LanNetMsg;
-use crate::net_message::WanMsgEnum;
+use crate::head_proto::{lan,wan};
+use crate::net_auth::NetAuth;
+use mini_socket::exc_kind::ExcKind;
+
 use crate::wan_service::WanService;
 use log::error;
 use mini_utils::bytes;
@@ -12,6 +12,7 @@ use std::time::Duration;
 
 /// 用于把 广域网的数据 转到 局域网服务中
 pub struct Service {
+    net_auth: NetAuth,
     wan_service: WanService,
     lan_service: LanService,
     single_max_task_num: u16,
@@ -39,8 +40,9 @@ impl Service {
         Ok(Service {
             wan_service,
             lan_service,
-            sleep_duration: sleep_duration,
-            single_max_task_num: single_max_task_num,
+            sleep_duration,
+            single_max_task_num,
+            net_auth: NetAuth::new(),
         })
     }
 
@@ -66,13 +68,36 @@ impl Service {
             match self.wan_service.receiver() {
                 None => return true,
                 //要把tcp_socket id  转 用户id
-                Some(WanMsgEnum::NetMsg(sid, msg)) => {
+                Some(wan::MsgEnum::NetMsg(wan_sid, msg)) => {
+                    //sid 连接wan 的sid
+                    if let Some(uid) = self.net_auth.sid_to_uid(wan_sid) {
+                        let lan_msg = lan::NetMsg{
+                            uid:*uid, pid:msg.pid, ext: msg.ext, data:msg.data
+                        };
+
+                        // 要根据 协议id 判断 发送到那个 lan_sid
+
+                        self.sender_lan(lan::MsgEnum::NetMsg(lan_sid, lan_msg));
+                    }else{
+
+                    }
+                    
                     //self.sender_wan(WanMsgEnum::NetMsg(sid, msg));
                     //self.sender_lan(LanMsgEnum::NetMsg(sid, LanNetMsg { sid: sid, msg: msg }));
                 }
 
                 //要把tcp_socket id  转 用户id
-                Some(WanMsgEnum::MsgKind(sid, kind)) => {
+                Some(wan::MsgEnum::ExcMsg(wan_sid, ekd)) => {
+                    if let Some(uid) = self.net_auth.sid_to_uid(wan_sid) {
+                        let lan_msg = lan::NetMsg{
+                            uid:*uid, pid: ekd as u16, ext: 0, data:vec![]
+                        };
+
+                        // 要根据 协议id 判断 发送到那个 lan_sid
+                        self.sender_lan(lan::MsgEnum::NetMsg(lan_sid, lan_msg));
+                    }else{
+
+                    }
                     //self.sender_wan(WanMsgEnum::MsgKind(sid, kind));
                     //self.sender_lan(LanMsgEnum::MsgKind(sid, LanMsgKind { sid, kind }));
                 }
@@ -90,17 +115,37 @@ impl Service {
         loop {
             match self.lan_service.receiver() {
                 None => return true,
-                //要把 用户id 转 tcp_socket id
-                Some(LanMsgEnum::NetMsg(sid, net_msg)) => {
-                    self.sender_wan(WanMsgEnum::NetMsg(net_msg.sid, net_msg.msg));
+                Some(lan::MsgEnum::NetMsg(sid, msg)) => {
+                    //sid 对应服务连接id
+                    //要把 用户id 转 tcp_socket id
+                    if let Some(wan_sid) = self.net_auth.uid_to_sid(msg.uid){
+                         // 判断 
+                        if ExcKind::is_exckind(msg.pid){
+                            let ekd = ExcKind::from(msg.pid);
+                            self.sender_wan(wan::MsgEnum::ExcMsg(*wan_sid, ekd));
+                        }else{
+                            let wan_msg = wan::NetMsg{
+                                pid:msg.pid,ext:msg.ext, data:msg.data
+                            };
+                            self.sender_wan(wan::MsgEnum::NetMsg(*wan_sid, wan_msg));
+                        }
+                    }else{
+
+                    }
+                   
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;
                     }
                 }
+
                 //要把 用户id 转 tcp_socket id
-                Some(LanMsgEnum::MsgKind(sid, msg_kind)) => {
-                    self.sender_wan(WanMsgEnum::MsgKind(msg_kind.sid, msg_kind.kind));
+                Some(lan::MsgEnum::ExcMsg(sid, ekd)) => {
+                    // 局域网内 网络异常
+                    /*
+                    let wan_sid = self.auth.uid_to_sid(msg.uid);
+                    self.sender_wan(wan::MsgEnum::ExcMsg(wan_sid, ekd));
+                    */
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;
@@ -110,11 +155,11 @@ impl Service {
         }
     }
 
-    fn sender_wan(&self, msg: WanMsgEnum) {
+    fn sender_wan(&self, msg: wan::MsgEnum) {
         self.wan_service.sender(msg);
     }
 
-    fn sender_lan(&self, msg: LanMsgEnum) {
+    fn sender_lan(&self, msg: lan::MsgEnum) {
         self.lan_service.sender(msg);
     }
 

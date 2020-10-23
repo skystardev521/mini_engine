@@ -6,14 +6,17 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::ptr::slice_from_raw_parts;
 
-use crate::bindings::{redisCommand};
+use crate::bindings::redisCommand;
 use crate::bindings::{freeReplyObject, redisFree};
+use crate::bindings::{
+    redisConnect, redisConnectUnix, redisConnectUnixWithTimeout, redisConnectWithTimeout,
+    redisReconnect,
+};
 use crate::bindings::{redisContext, redisReply, timeval};
-use crate::bindings::{redisConnect, redisReconnect, redisConnectUnix, redisConnectWithTimeout,redisConnectUnixWithTimeout};
 
 use crate::bindings::{
-    REDIS_REPLY_ARRAY, REDIS_REPLY_ERROR, REDIS_REPLY_INTEGER, REDIS_REPLY_NIL,
-    REDIS_REPLY_STATUS, REDIS_REPLY_STRING, REDIS_OK, REDIS_ERR_IO,REDIS_ERR_EOF
+    REDIS_ERR_EOF, REDIS_ERR_IO, REDIS_OK, REDIS_REPLY_ARRAY, REDIS_REPLY_ERROR,
+    REDIS_REPLY_INTEGER, REDIS_REPLY_NIL, REDIS_REPLY_STATUS, REDIS_REPLY_STRING,
 };
 
 #[macro_export]
@@ -44,7 +47,6 @@ impl Drop for RedisClient {
 }
 
 impl RedisClient {
-
     #[inline]
     fn ms_to_tv(ms: i64) -> timeval {
         let tv_sec = (ms / 1000) as i64;
@@ -66,20 +68,20 @@ impl RedisClient {
         unsafe { freeReplyObject(reply_ptr) }
     }
     #[inline]
-    fn get_client_status(ctx_ptr: *mut redisContext)->Option<String>{
-        let ctx_st = unsafe{ &*ctx_ptr};
-        if ctx_st.err as u32 == REDIS_OK{
+    fn get_client_status(ctx_ptr: *mut redisContext) -> Option<String> {
+        let ctx_st = unsafe { &*ctx_ptr };
+        if ctx_st.err as u32 == REDIS_OK {
             return None;
         }
-        if ctx_st.err as u32 == REDIS_ERR_IO || ctx_st.err as u32 == REDIS_ERR_EOF{
-            if unsafe{ redisReconnect(ctx_ptr)} as u32 == REDIS_OK {
+        if ctx_st.err as u32 == REDIS_ERR_IO || ctx_st.err as u32 == REDIS_ERR_EOF {
+            if unsafe { redisReconnect(ctx_ptr) } as u32 == REDIS_OK {
                 return None;
             }
         }
         let c_ptr = ctx_st.errstr.as_ptr();
         return Some(Self::c_char_ptr_to_string(c_ptr));
     }
-    
+
     pub fn redis_connect(ip: String, port: i32) -> Result<RedisClient, String> {
         match CString::new(ip) {
             Ok(c_ip) => {
@@ -87,7 +89,7 @@ impl RedisClient {
                 if ctx_ptr.is_null() {
                     return Err("redisConnect return null ptr".into());
                 }
-                if let Some(err) = Self::get_client_status(ctx_ptr){
+                if let Some(err) = Self::get_client_status(ctx_ptr) {
                     return Err(err);
                 }
                 return Ok(RedisClient { ctx_ptr });
@@ -97,7 +99,7 @@ impl RedisClient {
             }
         }
     }
-    
+
     pub fn redis_connect_unix(path: String) -> Result<RedisClient, String> {
         match CString::new(path) {
             Ok(c_path) => {
@@ -105,7 +107,7 @@ impl RedisClient {
                 if ctx_ptr.is_null() {
                     return Err("redisConnect return null ptr".into());
                 }
-                if let Some(err) = Self::get_client_status(ctx_ptr){
+                if let Some(err) = Self::get_client_status(ctx_ptr) {
                     return Err(err);
                 }
                 return Ok(RedisClient { ctx_ptr });
@@ -117,7 +119,11 @@ impl RedisClient {
     }
 
     /// timeout ms
-    pub fn redis_connect_timeout(ip: String, port: i32, timeout: u32) -> Result<RedisClient, String> {
+    pub fn redis_connect_timeout(
+        ip: String,
+        port: i32,
+        timeout: u32,
+    ) -> Result<RedisClient, String> {
         match CString::new(ip) {
             Ok(c_ip) => {
                 let tv = Self::ms_to_tv(timeout as i64);
@@ -125,7 +131,7 @@ impl RedisClient {
                 if ctx_ptr.is_null() {
                     return Err("redis_connect_timeout return null ptr".into());
                 }
-                if let Some(err) = Self::get_client_status(ctx_ptr){
+                if let Some(err) = Self::get_client_status(ctx_ptr) {
                     return Err(err);
                 }
                 return Ok(RedisClient { ctx_ptr });
@@ -135,7 +141,7 @@ impl RedisClient {
             }
         }
     }
-    
+
     pub fn redis_connect_unix_timeout(path: String, timeout: u32) -> Result<RedisClient, String> {
         match CString::new(path) {
             Ok(c_path) => {
@@ -144,7 +150,7 @@ impl RedisClient {
                 if ctx_ptr.is_null() {
                     return Err("redis_connect_timeout return null ptr".into());
                 }
-                if let Some(err) = Self::get_client_status(ctx_ptr){
+                if let Some(err) = Self::get_client_status(ctx_ptr) {
                     return Err(err);
                 }
                 return Ok(RedisClient { ctx_ptr });
@@ -154,21 +160,21 @@ impl RedisClient {
             }
         }
     }
-    
+
     pub fn redis_command(&self, cmd: String) -> Result<*mut c_void, String> {
         match CString::new(cmd) {
             Ok(c_cmd) => {
-                let mut reply_ptr = unsafe {redisCommand(self.ctx_ptr, c_cmd.as_ptr())};
-                if let Some(err) = Self::get_client_status(self.ctx_ptr){
+                let mut reply_ptr = unsafe { redisCommand(self.ctx_ptr, c_cmd.as_ptr()) };
+                if let Some(err) = Self::get_client_status(self.ctx_ptr) {
                     return Err(err);
                 }
                 if reply_ptr.is_null() {
-                    reply_ptr = unsafe {redisCommand(self.ctx_ptr, c_cmd.as_ptr())};
+                    reply_ptr = unsafe { redisCommand(self.ctx_ptr, c_cmd.as_ptr()) };
                     if reply_ptr.is_null() {
                         return Err("redisCommand return null".into());
                     }
                 }
-                let reply_st = unsafe {&mut *(reply_ptr as *mut redisReply)};
+                let reply_st = unsafe { &mut *(reply_ptr as *mut redisReply) };
                 if reply_st.type_ as u32 == REDIS_REPLY_ERROR {
                     if reply_st.str_.is_null() {
                         Self::free_reply_object(reply_ptr);
@@ -189,7 +195,7 @@ impl RedisClient {
             }
         }
     }
-    
+
     pub fn redis_cmd_i64(&self, cmd: String) -> Result<i64, String> {
         match self.redis_command(cmd) {
             Ok(reply_ptr) => {
@@ -209,7 +215,7 @@ impl RedisClient {
             Err(err) => return Err(err),
         }
     }
-    
+
     pub fn redis_cmd_ok(&self, cmd: String) -> Result<bool, String> {
         match self.redis_command(cmd) {
             Ok(reply_ptr) => {
@@ -233,7 +239,7 @@ impl RedisClient {
             Err(err) => return Err(err),
         }
     }
-    
+
     pub fn redis_cmd_str(&self, cmd: String) -> Result<String, String> {
         match self.redis_command(cmd) {
             Ok(reply_ptr) => {
@@ -254,7 +260,6 @@ impl RedisClient {
         }
     }
 
-    
     pub fn redis_cmd_vec_i64(&self, cmd: String) -> Result<Vec<i64>, String> {
         match self.redis_command(cmd) {
             Ok(reply_ptr) => {
@@ -285,7 +290,7 @@ impl RedisClient {
             Err(err) => return Err(err),
         }
     }
-    
+
     pub fn redis_cmd_vec_str(&self, cmd: String) -> Result<Vec<String>, String> {
         match self.redis_command(cmd) {
             Ok(reply_ptr) => {
@@ -318,7 +323,6 @@ impl RedisClient {
     }
 }
 
-/*
 #[test]
 pub fn test_redis_client() {
     test_fmt!("test_fmt:{} {} {}", "a", "b", "c");
@@ -333,8 +337,7 @@ pub fn test_redis_client() {
                 }
                 let cmd = format!("HGETALL runoobkey");
                 match client.redis_cmd_vec_str(cmd) {
-                    Ok(_vec_str) => {
-                    }
+                    Ok(_vec_str) => {}
                     Err(err) => println!("redis_command err:{}", err),
                 }
             }
@@ -342,4 +345,3 @@ pub fn test_redis_client() {
         Err(err) => println!("connect err:{}", err),
     }
 }
-*/

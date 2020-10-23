@@ -1,6 +1,6 @@
-use mini_socket::tcp_buf_rw::ReadResult;
-use mini_socket::tcp_buf_rw::TcpBufRw;
-use mini_socket::tcp_buf_rw::WriteResult;
+use mini_socket::tcp_socket_rw::ReadResult;
+use mini_socket::tcp_socket_rw::TcpSocketRw;
+use mini_socket::tcp_socket_rw::WriteResult;
 use mini_utils::bytes;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -21,12 +21,12 @@ pub const MSG_HEAD_SIZE: usize = 4;
 /// 数据包体最大字节数
 pub const MSG_MAX_SIZE: usize = 1024 * 1024;
 
-pub struct WanBufRw {
-    buf_reader: bufReader,
-    buf_writer: bufWriter,
+pub struct WanTcpRw {
+    buf_reader: BufReader,
+    buf_writer: BufWriter,
 }
 
-pub struct bufReader {
+pub struct BufReader {
     //包id(0~4096)
     id: u16,
     /// 0:no data
@@ -37,7 +37,7 @@ pub struct bufReader {
     head_data: [u8; MSG_HEAD_SIZE],
 }
 
-pub struct bufWriter {
+pub struct BufWriter {
     //包id(0~4096)
     id: u16,
     body_pos: usize,
@@ -46,17 +46,17 @@ pub struct bufWriter {
     head_data: [u8; MSG_HEAD_SIZE],
 }
 
-impl Default for WanBufRw {
+impl Default for WanTcpRw {
     fn default() -> Self {
-        WanBufRw {
-            buf_reader: bufReader {
+        WanTcpRw {
+            buf_reader: BufReader {
                 id: 0,
                 body_pos: 0,
                 head_pos: 0,
                 body_data: vec![],
                 head_data: [0u8; MSG_HEAD_SIZE],
             },
-            buf_writer: bufWriter {
+            buf_writer: BufWriter {
                 id: 0,
                 body_pos: 0,
                 head_pos: 0,
@@ -114,7 +114,7 @@ fn write_data(buffer: &[u8], wsize: &mut usize, socket: &mut TcpStream) -> Write
     }
 }
 
-impl TcpBufRw<Vec<u8>> for WanBufRw {
+impl TcpSocketRw<Vec<u8>> for WanTcpRw {
     /// 把数据写到tcp buffer中
     fn write(&mut self, socket: &mut TcpStream, buffer: &mut Vec<u8>) -> WriteResult {
         if MSG_MAX_SIZE < buffer.len() {
@@ -208,7 +208,7 @@ impl TcpBufRw<Vec<u8>> for WanBufRw {
     }
 }
 
-impl bufReader {
+impl BufReader {
     fn split_msg_data(
         &mut self,
         in_pos: usize,
@@ -393,7 +393,7 @@ impl bufReader {
 }
 
 /*
-impl bufReader {
+impl BufReader {
     fn split_msg_data(
         &mut self,
         in_pos: usize,

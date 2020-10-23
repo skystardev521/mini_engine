@@ -1,6 +1,6 @@
-use crate::tcp_buf_rw::ReadResult;
-use crate::tcp_buf_rw::TcpBufRw;
-use crate::tcp_buf_rw::WriteResult;
+use crate::tcp_socket_rw::ReadResult;
+use crate::tcp_socket_rw::TcpSocketRw;
+use crate::tcp_socket_rw::WriteResult;
 use std::collections::VecDeque;
 use std::mem;
 use std::net::TcpStream;
@@ -9,15 +9,15 @@ pub struct TcpSocket<MSG> {
     pub epevs: i32,
     pub socket: TcpStream,
     vec_deque: VecDeque<MSG>,
-    pub tcp_buf_rw: Box<dyn TcpBufRw<MSG>>,
+    pub tcp_socket_rw: Box<dyn TcpSocketRw<MSG>>,
 }
 
 impl<MSG> TcpSocket<MSG> {
-    pub fn new(socket: TcpStream, tcp_buf_rw: Box<dyn TcpBufRw<MSG>>) -> Self {
+    pub fn new(socket: TcpStream, tcp_socket_rw: Box<dyn TcpSocketRw<MSG>>) -> Self {
         TcpSocket {
             socket,
             epevs: 0,
-            tcp_buf_rw,
+            tcp_socket_rw,
             vec_deque: VecDeque::new(),
         }
     }
@@ -45,7 +45,7 @@ impl<MSG> TcpSocket<MSG> {
     pub fn write(&mut self) -> WriteResult {
         let socket = &mut self.socket;
         while let Some(msg) = self.vec_deque.front_mut() {
-            match self.tcp_buf_rw.write(socket, msg) {
+            match self.tcp_socket_rw.write(socket, msg) {
                 WriteResult::Finish => {
                     self.vec_deque.pop_front();
                 }
@@ -61,6 +61,6 @@ impl<MSG> TcpSocket<MSG> {
     #[inline]
     pub fn read(&mut self, vec_share: &mut Vec<u8>) -> ReadResult<MSG> {
         let socket = &mut self.socket;
-        self.tcp_buf_rw.read(socket, vec_share)
+        self.tcp_socket_rw.read(socket, vec_share)
     }
 }

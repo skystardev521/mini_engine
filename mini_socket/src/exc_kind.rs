@@ -1,3 +1,4 @@
+/// 系统内部消息枚举
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ExcKind {
     /// 新建一个链接
@@ -22,6 +23,27 @@ pub enum ExcKind {
     SocketIdNotExist = 6,
 
     SysMsgIdMaxValue = 255,
+}
+
+impl ExcKind {
+    #[inline]
+    pub fn is_exckind(v: u16)-> bool{
+        v < ExcKind::SysMsgIdMaxValue as u16
+    }
+    
+    #[inline]
+    pub fn from(v: u16)->Self{
+        match v {
+            0=> ExcKind::NewSocket,
+            1=> ExcKind::CloseSocket,
+            2=> ExcKind::SocketClose,
+            3=> ExcKind::BusyServer,
+            4=> ExcKind::MsgQueueIsFull,
+            5=> ExcKind::ExceptionServer,
+            6=> ExcKind::SocketIdNotExist,
+            _=> ExcKind::SysMsgIdMaxValue,
+        }
+    }
 }
 
 /*

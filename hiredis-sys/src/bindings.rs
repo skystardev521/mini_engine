@@ -1,4 +1,3 @@
-
 #![allow(dead_code, non_camel_case_types, non_snake_case, non_upper_case_globals)]
 
 
@@ -60,62 +59,52 @@ pub type __time_t = ::std::os::raw::c_long;
 pub type __suseconds_t = ::std::os::raw::c_long;
 
 extern "C" {
-    
+
     pub fn redisFree(c: *mut redisContext);
 
     pub fn freeReplyObject(reply: *mut ::std::os::raw::c_void);
 
-    
     pub fn redisGetReply(
         c: *mut redisContext,
         reply: *mut *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 
-    
     pub fn redisConnect(
         ip: *const ::std::os::raw::c_char,
         port: ::std::os::raw::c_int,
     ) -> *mut redisContext;
 
-    
     pub fn redisConnectWithTimeout(
         ip: *const ::std::os::raw::c_char,
         port: ::std::os::raw::c_int,
         tv: timeval,
     ) -> *mut redisContext;
 
-    
     pub fn redisConnectUnix(path: *const ::std::os::raw::c_char) -> *mut redisContext;
 
-    
     pub fn redisConnectUnixWithTimeout(
         path: *const ::std::os::raw::c_char,
         tv: timeval,
     ) -> *mut redisContext;
-    
-    
+
     pub fn redisReconnect(c: *mut redisContext) -> ::std::os::raw::c_int;
 
-    
     pub fn redisSetTimeout(c: *mut redisContext, tv: timeval) -> ::std::os::raw::c_int;
 
-    
     pub fn redisEnableKeepAlive(c: *mut redisContext) -> ::std::os::raw::c_int;
 
-    
     pub fn redisCommand(
         c: *mut redisContext,
         format: *const ::std::os::raw::c_char,
         ...
     ) -> *mut ::std::os::raw::c_void;
 
-    
     pub fn redisAppendCommand(
         c: *mut redisContext,
         format: *const ::std::os::raw::c_char,
         ...
     ) -> ::std::os::raw::c_int;
-    
+
 }
 
 #[repr(C)]
@@ -137,7 +126,6 @@ pub struct redisReply {
     pub elements: size_t,
     pub element: *mut *mut redisReply,
 }
-
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

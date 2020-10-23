@@ -6,14 +6,14 @@ use mini_utils::logger::Logger;
 use std::thread::{self, Builder};
 use std::time::Duration;
 
-mod auth;
+mod net_auth;
 mod config;
-mod lan_buf_rw;
 mod lan_service;
-mod net_message;
+mod lan_tcp_rw;
+mod head_proto;
 mod service;
-mod wan_buf_rw;
 mod wan_service;
+mod wan_tcp_rw;
 
 use mini_utils::time;
 

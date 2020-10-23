@@ -1,12 +1,12 @@
 use crate::exc_kind::ExcKind;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
-use crate::tcp_buf_rw::ReadResult;
-use crate::tcp_buf_rw::TcpBufRw;
-use crate::tcp_buf_rw::WriteResult;
 use crate::tcp_listen::TcpListen;
 use crate::tcp_listen_config::TcpListenConfig;
 use crate::tcp_socket_mgmt::TcpSocketMgmt;
+use crate::tcp_socket_rw::ReadResult;
+use crate::tcp_socket_rw::TcpSocketRw;
+use crate::tcp_socket_rw::WriteResult;
 
 use libc;
 use log::{error, info, warn};
@@ -47,7 +47,7 @@ impl<'a, TBRW, MSG> Drop for TcpListenService<'a, TBRW, MSG> {
 
 impl<'a, TBRW, MSG> TcpListenService<'a, TBRW, MSG>
 where
-    TBRW: TcpBufRw<MSG> + Default + 'static,
+    TBRW: TcpSocketRw<MSG> + Default + 'static,
 {
     pub fn new(
         config: &'a TcpListenConfig,
@@ -83,6 +83,31 @@ where
             ],
         })
     }
+
+    fn write_data(
+        os_epoll: &OSEpoll,
+        sid: u64,
+        tcp_socket: &mut TcpSocket<MSG>,
+    ) -> Result<(), String> {
+        match tcp_socket.write() {
+            WriteResult::Finish => {
+                if tcp_socket.epevs == libc::EPOLLIN {
+                    return Ok(());
+                }
+                tcp_socket.epevs = libc::EPOLLIN;
+                return os_epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
+            }
+            WriteResult::BufferFull => {
+                if tcp_socket.epevs == EPOLL_IN_OUT {
+                    return Ok(());
+                }
+                tcp_socket.epevs = EPOLL_IN_OUT;
+                return os_epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
+            }
+            WriteResult::Error(err) => return Err(err),
+        }
+    }
+
     pub fn tick(&mut self) {}
 
     /// 获取连接的 tcp_sokcet 数量
@@ -90,6 +115,7 @@ where
     pub fn tcp_socket_count(&self) -> u32 {
         self.tcp_socket_mgmt.tcp_socket_count()
     }
+
     pub fn epoll_event(&mut self, wait_timeout: i32) -> Result<u32, String> {
         // todo 根据测试代码 死循环向同一条连接中发数据 wait 200多毫秒才会触发一次事件
         match self.os_epoll.wait(wait_timeout, &mut self.vec_epoll_event) {
@@ -149,7 +175,7 @@ where
                 tcp_socket.push_vec_queue(msg);
 
                 if tcp_socket.vec_queue_len() == 1 {
-                    if let Err(err) = write_data(&self.os_epoll, sid, tcp_socket) {
+                    if let Err(err) = Self::write_data(&self.os_epoll, sid, tcp_socket) {
                         self.del_tcp_socket(sid);
                         info!("sid:{} write_data  err:{}", sid, err);
                         (self.exc_msg_cb_fn)(sid, ExcKind::SocketClose);
@@ -165,7 +191,7 @@ where
 
     fn write_event(&mut self, sid: u64) {
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(sid) {
-            if let Err(err) = write_data(&self.os_epoll, sid, tcp_socket) {
+            if let Err(err) = Self::write_data(&self.os_epoll, sid, tcp_socket) {
                 self.del_tcp_socket(sid);
                 warn!("write_event sid:{} err:{}", sid, err);
                 (self.exc_msg_cb_fn)(sid, ExcKind::SocketClose);
@@ -200,12 +226,14 @@ where
             return;
         }
 
+        let raw_fd = socket.as_raw_fd();
+
+        /*
         if let Err(err) = socket.set_nodelay(self.config.tcp_nodelay) {
             error!("new_socket set_nodelay:{}", err);
             return;
         }
-
-        let raw_fd = socket.as_raw_fd();
+        */
 
         if let Err(err) = os_socket::setsockopt(
             raw_fd,
@@ -226,6 +254,8 @@ where
             error!("new_socket setsockopt SO_SNDBUF :{}", err);
             return;
         }
+        
+
         match self.tcp_socket_mgmt.add_tcp_socket::<TBRW>(socket) {
             Ok(sid) => {
                 info!("tcp_socket_mgmt.add_tcp_socket sid:{}", sid);
@@ -241,7 +271,6 @@ where
             }
         }
     }
-    /// is_send_sys_msg:删除后要不要通知业务层
     pub fn del_tcp_socket(&mut self, sid: u64) {
         match self.tcp_socket_mgmt.del_tcp_socket(sid) {
             Ok(tcp_socket) => {
@@ -254,29 +283,5 @@ where
                 warn!("tcp_socket_mgmt.del_tcp_socket({}) Error:{}", sid, err);
             }
         }
-    }
-}
-
-fn write_data<MSG>(
-    os_epoll: &OSEpoll,
-    sid: u64,
-    tcp_socket: &mut TcpSocket<MSG>,
-) -> Result<(), String> {
-    match tcp_socket.write() {
-        WriteResult::Finish => {
-            if tcp_socket.epevs == libc::EPOLLIN {
-                return Ok(());
-            }
-            tcp_socket.epevs = libc::EPOLLIN;
-            return os_epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), libc::EPOLLIN);
-        }
-        WriteResult::BufferFull => {
-            if tcp_socket.epevs == EPOLL_IN_OUT {
-                return Ok(());
-            }
-            tcp_socket.epevs = EPOLL_IN_OUT;
-            return os_epoll.ctl_mod_fd(sid, tcp_socket.socket.as_raw_fd(), EPOLL_IN_OUT);
-        }
-        WriteResult::Error(err) => return Err(err),
     }
 }

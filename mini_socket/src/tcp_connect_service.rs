@@ -1,9 +1,9 @@
 use crate::exc_kind::ExcKind;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
-use crate::tcp_buf_rw::ReadResult;
-use crate::tcp_buf_rw::TcpBufRw;
-use crate::tcp_buf_rw::WriteResult;
+use crate::tcp_socket_rw::ReadResult;
+use crate::tcp_socket_rw::TcpSocketRw;
+use crate::tcp_socket_rw::WriteResult;
 
 use crate::tcp_connect::TcpConnect;
 use crate::tcp_connect_config::TcpConnectConfig;
@@ -46,7 +46,7 @@ impl<'a, TBRW, MSG> Drop for TcpConnectService<'a, TBRW, MSG> {
 
 impl<'a, TBRW, MSG> TcpConnectService<'a, TBRW, MSG>
 where
-    TBRW: TcpBufRw<MSG> + Default + 'static,
+    TBRW: TcpSocketRw<MSG> + Default + 'static,
 {
     pub fn new(
         vec_tcp_connect_config: Vec<TcpConnectConfig>,
@@ -221,7 +221,7 @@ fn init_tcp_connect<TBRW, MSG>(
     vec_tcp_connect_config: Vec<TcpConnectConfig>,
 ) -> Vec<TcpConnect<MSG>>
 where
-    TBRW: TcpBufRw<MSG> + Default + 'static,
+    TBRW: TcpSocketRw<MSG> + Default + 'static,
 {
     let mut id = 0;
     let connect_num = vec_tcp_connect_config.len();
@@ -278,10 +278,10 @@ fn write_data<MSG>(
 fn tcp_reconnect<TBRW, MSG>(
     os_epoll: &OSEpoll,
     tcp_connect: &TcpConnect<MSG>,
-    //tcp_buf_rw: Box<dyn TcpBufRw<MSG>>,
+    //tcp_socket_rw: Box<dyn TcpSocketRw<MSG>>,
 ) -> Option<TcpSocket<MSG>>
 where
-    TBRW: TcpBufRw<MSG> + Default + 'static,
+    TBRW: TcpSocketRw<MSG> + Default + 'static,
 {
     let ts = time::timestamp();
     if tcp_connect.get_last_reconnect_timestamp()
@@ -314,7 +314,7 @@ fn new_tcp_socket<TBRW, MSG>(
     config: &TcpConnectConfig,
 ) -> Result<TcpSocket<MSG>, String>
 where
-    TBRW: TcpBufRw<MSG> + Default + 'static,
+    TBRW: TcpSocketRw<MSG> + Default + 'static,
 {
     match config.socket_addr.parse::<SocketAddr>() {
         Ok(addr) => {

@@ -12,7 +12,7 @@ pub enum ReadResult<MSG> {
     Error(Vec<MSG>, String),
 }
 
-pub trait TcpBufRw<MSG> {
+pub trait TcpSocketRw<MSG> {
     /// 把数据写到tcp buffer中
     fn write(&mut self, socket: &mut TcpStream, data: &mut MSG) -> WriteResult;
 

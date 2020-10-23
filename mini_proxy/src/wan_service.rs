@@ -1,7 +1,6 @@
-use crate::net_message::ExcMsg;
-use crate::net_message::WanMsgEnum;
+use crate::head_proto::wan::{MsgEnum,NetMsg};
 
-use crate::wan_buf_rw::WanBufRw;
+use crate::wan_tcp_rw::WanTcpRw;
 use mini_socket::exc_kind::ExcKind;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
@@ -19,7 +18,7 @@ use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
 pub struct WanService {
-    worker: Worker<WanMsgEnum, ()>,
+    worker: Worker<MsgEnum, ()>,
 }
 
 impl WanService {
@@ -38,7 +37,7 @@ impl WanService {
     }
 
     #[inline]
-    pub fn receiver(&self) -> Option<WanMsgEnum> {
+    pub fn receiver(&self) -> Option<MsgEnum> {
         match self.worker.receiver() {
             RecvResEnum::Empty => return None,
             RecvResEnum::Data(msg_enum) => {
@@ -51,7 +50,7 @@ impl WanService {
         }
     }
     #[inline]
-    pub fn sender(&self, msg: WanMsgEnum) -> bool {
+    pub fn sender(&self, msg: MsgEnum) -> bool {
         match self.worker.sender(msg) {
             SendResEnum::Success => {
                 return true;
@@ -71,14 +70,13 @@ impl WanService {
 #[allow(dead_code)]
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
-) -> Box<dyn FnOnce(Receiver<WanMsgEnum>, SyncSender<WanMsgEnum>) + Send> {
+) -> Box<dyn FnOnce(Receiver<MsgEnum>, SyncSender<MsgEnum>) + Send> {
     Box::new(
-        move |receiver: Receiver<WanMsgEnum>, sender: SyncSender<WanMsgEnum>| {
+        move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<Vec<u8>>| {
+            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<NetMsg>| {
                 for msg in vec_msg {
-                    let msg = NetMsg {};
-                    match sender.try_send(WanMsgEnum::NetMsg(sid, msg)) {
+                    match sender.try_send(MsgEnum::NetMsg(sid, msg)) {
                         Ok(_) => {}
                         Err(TrySendError::Full(_)) => {
                             error!("WanService try_send Full");
@@ -89,12 +87,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |sid: u64, kind: ExcKind| {
-                let msg = ExcMsg {
-                    sid: sid,
-                    eid: kind,
-                };
-                match sender.try_send(WanMsgEnum::ExcMsg(msg)) {
+            let mut msg_kind_cb_fn = |sid: u64, ekd: ExcKind| {
+                match sender.try_send(MsgEnum::ExcMsg(sid, ekd)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("WanService try_send Full");
@@ -105,7 +99,7 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_listen_service: TcpListenService<WanBufRw, Vec<u8>>;
+            let mut tcp_listen_service: TcpListenService<WanTcpRw, NetMsg>;
             match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut msg_kind_cb_fn)
             {
                 Ok(service) => tcp_listen_service = service,
@@ -136,13 +130,13 @@ fn worker_closure(
                 //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(WanMsgEnum::NetMsg(msg)) => {
+                        Ok(MsgEnum::NetMsg(sid,msg)) => {
                             //这里要优化 判断是否广播消息
                             tcp_listen_service.write_net_msg(sid, msg);
                         }
-                        Ok(WanMsgEnum::ExcMsg(msg)) => {
-                            if msg.ekd == ExcKind::CloseSocket {
-                                tcp_listen_service.del_tcp_socket(msg.sid);
+                        Ok(MsgEnum::ExcMsg(sid,ekd)) => {
+                            if ekd == ExcKind::CloseSocket {
+                                tcp_listen_service.del_tcp_socket(sid);
                             }
                         }
                         Err(TryRecvError::Empty) => break,

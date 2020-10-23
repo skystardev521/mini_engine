@@ -1,5 +1,5 @@
-use crate::tcp_buf_rw::TcpBufRw;
 use crate::tcp_socket::TcpSocket;
+use crate::tcp_socket_rw::TcpSocketRw;
 use std::collections::HashMap;
 use std::net::TcpStream;
 
@@ -76,7 +76,7 @@ impl<MSG> TcpSocketMgmt<MSG> {
 
     pub fn add_tcp_socket<TBRW>(&mut self, socket: TcpStream) -> Result<u64, String>
     where
-        TBRW: TcpBufRw<MSG> + Default + 'static,
+        TBRW: TcpSocketRw<MSG> + Default + 'static,
     {
         if self.tcp_socket_hash_map.len() == self.tcp_socket_hash_map.capacity() {
             return Err("Max Socket Number".into());
