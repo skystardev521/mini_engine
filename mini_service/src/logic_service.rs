@@ -1,10 +1,10 @@
 use crate::config::Config;
 use crate::conn_service::ConnService;
-use crate::net_message::MsgEnum;
 use log::{error, warn};
-use mini_socket::msg_kind::MsgKind;
+use mini_socket::exc_kind::ExcKind;
 use std::thread;
 use std::time::Duration;
+use crate::head_proto::lan::{MsgEnum, NetMsg};
 
 pub struct LogicService {
     sleep_duration: Duration,

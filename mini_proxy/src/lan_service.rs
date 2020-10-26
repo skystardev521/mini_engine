@@ -1,5 +1,5 @@
+use crate::head_proto::lan::{MsgEnum, NetMsg};
 use crate::lan_tcp_rw::LanTcpRw;
-use crate::head_proto::lan::{MsgEnum,NetMsg};
 
 use mini_socket::exc_kind::ExcKind;
 use mini_socket::tcp_listen_config::TcpListenConfig;
@@ -71,7 +71,7 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<NetMsg>| {
+            let mut net_msg_cb_fn = |sid: u32, vec_msg: Vec<NetMsg>| {
                 for msg in vec_msg {
                     match sender.try_send(MsgEnum::NetMsg(sid, msg)) {
                         Ok(_) => {}
@@ -84,7 +84,7 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |sid: u64, ekd: ExcKind| {
+            let mut msg_kind_cb_fn = |sid: u32, ekd: ExcKind| {
                 match sender.try_send(MsgEnum::ExcMsg(sid, ekd)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {

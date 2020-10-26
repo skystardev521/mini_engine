@@ -3,7 +3,7 @@ use crate::tcp_socket::TcpSocket;
 use std::cell::Cell;
 
 pub struct TcpConnect<MSG> {
-    sid: u64,
+    cid: u32,
     config: TcpConnectConfig,
     last_reconnect_timestamp: Cell<u64>,
     tcp_socket_opt: Option<TcpSocket<MSG>>,
@@ -11,17 +11,17 @@ pub struct TcpConnect<MSG> {
 }
 
 impl<MSG> TcpConnect<MSG> {
-    pub fn new(sid: u64, config: TcpConnectConfig, tcp_socket: Option<TcpSocket<MSG>>) -> Self {
+    pub fn new(cid: u32, config: TcpConnectConfig, tcp_socket: Option<TcpSocket<MSG>>) -> Self {
         TcpConnect {
-            sid,
+            cid,
             config,
             tcp_socket_opt: tcp_socket,
             last_reconnect_timestamp: Cell::new(0),
         }
     }
     #[inline]
-    pub fn get_sid(&self) -> u64 {
-        self.sid
+    pub fn get_cid(&self) -> u32 {
+        self.cid
     }
 
     #[inline]

@@ -1,3 +1,4 @@
+use crate::head_proto::wan::NetMsg;
 use mini_socket::tcp_socket_rw::ReadResult;
 use mini_socket::tcp_socket_rw::TcpSocketRw;
 use mini_socket::tcp_socket_rw::WriteResult;
@@ -6,7 +7,6 @@ use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
-use crate::head_proto::wan::NetMsg;
 
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;
@@ -22,9 +22,9 @@ pub const MSG_MAX_SIZE: usize = 1024 * 1024;
 
 macro_rules! min_val {
     ($v1:expr, $v2:expr) => {
-        if $v1 < $v2{
+        if $v1 < $v2 {
             $v1
-        }else{
+        } else {
             $v2
         }
     };
@@ -43,11 +43,7 @@ macro_rules! next_msg_id {
 macro_rules! copy_data {
     ($src:expr,$dst:expr,$count:expr) => {
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                $src.as_ptr(),
-                $dst.as_mut_ptr(),
-                $count,
-            );
+            std::ptr::copy_nonoverlapping($src.as_ptr(), $dst.as_mut_ptr(), $count);
         }
     };
 }
@@ -84,7 +80,7 @@ macro_rules! read_head_data {
             ext: bytes::read_u32(&$buf[6..]),
         }
     };
-} 
+}
 
 pub struct WanTcpRw {
     buf_reader: BufReader,
@@ -133,7 +129,7 @@ impl Default for WanTcpRw {
     }
 }
 
-impl WanTcpRw{
+impl WanTcpRw {
     fn write_data(buffer: &[u8], wsize: &mut usize, socket: &mut TcpStream) -> WriteResult {
         loop {
             match socket.write(&buffer) {
@@ -263,7 +259,6 @@ impl BufReader {
     ) -> Option<String> {
         let mut out_pos = 0;
         loop {
-
             if self.head_pos < MSG_HEAD_SIZE {
                 //----------------------------------------------------------------------
                 let data_len = in_pos - out_pos;
@@ -274,23 +269,23 @@ impl BufReader {
                 copy_data!(buffer[out_pos..], self.head_data[self.head_pos..], min_len);
 
                 self.head_pos += min_len;
-                
+
                 //不够包头长度
                 if min_len < tail_len {
                     return None;
-                }             
+                }
 
                 out_pos += tail_len;
 
                 //获取包头数据
                 let (mid, msize) = head_sign_data!(read_head_u32!(&self.head_data));
-               
+
                 if let Some(err) = self.check_sign_data(mid, msize) {
                     return Some(err);
                 }
                 //分配包体内存
                 self.body_pos = 0;
-                self.body_data = vec![0u8; msize]; 
+                self.body_data = vec![0u8; msize];
             };
 
             let data_len = in_pos - out_pos;

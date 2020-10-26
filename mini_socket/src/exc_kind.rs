@@ -26,11 +26,12 @@ pub enum ExcKind {
 }
 
 impl ExcKind {
+    
     #[inline]
     pub fn is_exckind(v: u16)-> bool{
         v < ExcKind::SysMsgIdMaxValue as u16
     }
-    
+
     #[inline]
     pub fn from(v: u16)->Self{
         match v {

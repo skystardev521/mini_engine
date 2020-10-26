@@ -1,6 +1,5 @@
-use crate::lan_msg::NetMsg;
-use crate::net_buf_rw::NetBufRw;
-use mini_socket::msg_kind::MsgKind;
+use crate::lan_tcp_rw::LanTcpRw;
+use mini_socket::exc_kind::ExcKind;
 use mini_socket::tcp_connect_config::TcpConnectConfig;
 use mini_socket::tcp_connect_service::TcpConnectService;
 use mini_utils::worker_config::WorkerConfig;
@@ -14,6 +13,7 @@ use log::{error, warn};
 use mini_utils::worker::RecvResEnum;
 use mini_utils::worker::SendResEnum;
 use mini_utils::worker::Worker;
+use crate::head_proto::lan::{MsgEnum, NetMsg};
 
 /// 收发广域网的数据
 pub struct ConnService {
@@ -71,7 +71,7 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<NetMsg>| {
+            let mut net_msg_cb_fn = |sid: u32, vec_msg: Vec<NetMsg>| {
                 for msg in vec_msg {
                     match sender.try_send(MsgEnum::NetMsg(sid, msg)) {
                         Ok(_) => {}
@@ -85,8 +85,8 @@ fn worker_closure(
                 }
             };
 
-            let mut msg_kind_cb_fn = |sid: u64, err_msg: MsgKind| {
-                match sender.try_send(MsgEnum::MsgKind(sid, err_msg)) {
+            let mut msg_kind_cb_fn = |sid: u32, err_msg: ExcKind| {
+                match sender.try_send(MsgEnum::ExcMsg(sid, err_msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("TcpConnectService try_send Full");
@@ -97,7 +97,7 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_connect_service: TcpConnectService<NetBufRw, NetMsg>;
+            let mut tcp_connect_service: TcpConnectService<LanTcpRw, NetMsg>;
             match TcpConnectService::new(
                 vec_tcp_connect_config,
                 &mut net_msg_cb_fn,
@@ -132,7 +132,7 @@ fn worker_closure(
                             //这里要优化 判断是否广播消息
                             tcp_connect_service.write_net_msg(sid, net_msg);
                         }
-                        Ok(MsgEnum::MsgKind(_sid, _sys_msg)) => {}
+                        Ok(MsgEnum::ExcMsg(_sid, ekd)) => {}
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Disconnected) => {
                             error!("ConnService receiver.try_recv:Disconnected");

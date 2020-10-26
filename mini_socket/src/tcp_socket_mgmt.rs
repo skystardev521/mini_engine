@@ -5,18 +5,18 @@ use std::net::TcpStream;
 
 pub struct TcpSocketMgmt<MSG> {
     //不会等于零
-    next_sid: u64,
+    next_cid: u32,
     /// 监听ID
-    listen_id: u64,
+    listen_id: u32,
     /// 待发的消息队列最大长度
     msg_deque_max_len: usize,
     /// 可以优化使用别的数据结构
-    tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>,
+    tcp_socket_hash_map: HashMap<u32, TcpSocket<MSG>>,
 }
 
 impl<MSG> TcpSocketMgmt<MSG> {
-    pub fn new(listen_id: u64, max_socket: u32, msg_deque_max_len: usize) -> Self {
-        let tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>;
+    pub fn new(listen_id: u32, max_socket: u32, msg_deque_max_len: usize) -> Self {
+        let tcp_socket_hash_map: HashMap<u32, TcpSocket<MSG>>;
         if max_socket < 8 {
             tcp_socket_hash_map = HashMap::with_capacity(8);
         } else {
@@ -25,28 +25,28 @@ impl<MSG> TcpSocketMgmt<MSG> {
 
         TcpSocketMgmt {
             listen_id,
-            next_sid: 0,
+            next_cid: 0,
             msg_deque_max_len,
             tcp_socket_hash_map,
         }
     }
 
-    fn next_sid(&self) -> u64 {
-        let mut sid = self.next_sid;
+    fn next_cid(&self) -> u32 {
+        let mut cid = self.next_cid;
         loop {
-            sid += 1;
-            if sid == 0 || sid == u64::MAX {
-                sid = 1;
+            cid += 1;
+            if cid == 0 || cid == u32::MAX {
+                cid = 1;
             }
 
-            if sid == self.listen_id {
-                sid += 1;
+            if cid == self.listen_id {
+                cid += 1;
             }
 
-            if self.tcp_socket_hash_map.contains_key(&sid) {
+            if self.tcp_socket_hash_map.contains_key(&cid) {
                 continue;
             }
-            return sid;
+            return cid;
         }
     }
 
@@ -61,31 +61,31 @@ impl<MSG> TcpSocketMgmt<MSG> {
     }
 
     #[inline]
-    pub fn get_tcp_socket(&mut self, sid: u64) -> Option<&mut TcpSocket<MSG>> {
-        self.tcp_socket_hash_map.get_mut(&sid)
+    pub fn get_tcp_socket(&mut self, cid: u32) -> Option<&mut TcpSocket<MSG>> {
+        self.tcp_socket_hash_map.get_mut(&cid)
     }
 
     #[inline]
-    pub fn del_tcp_socket(&mut self, sid: u64) -> Result<TcpSocket<MSG>, String> {
-        if let Some(tcp_socket) = self.tcp_socket_hash_map.remove(&sid) {
+    pub fn del_tcp_socket(&mut self, cid: u32) -> Result<TcpSocket<MSG>, String> {
+        if let Some(tcp_socket) = self.tcp_socket_hash_map.remove(&cid) {
             Ok(tcp_socket)
         } else {
-            Err(format!("sid:{} not exists", sid))
+            Err(format!("cid:{} not exists", cid))
         }
     }
 
-    pub fn add_tcp_socket<TBRW>(&mut self, socket: TcpStream) -> Result<u64, String>
+    pub fn add_tcp_socket<TBRW>(&mut self, socket: TcpStream) -> Result<u32, String>
     where
         TBRW: TcpSocketRw<MSG> + Default + 'static,
     {
         if self.tcp_socket_hash_map.len() == self.tcp_socket_hash_map.capacity() {
             return Err("Max Socket Number".into());
         }
-        self.next_sid = self.next_sid();
+        self.next_cid = self.next_cid();
         self.tcp_socket_hash_map.insert(
-            self.next_sid,
+            self.next_cid,
             TcpSocket::new(socket, Box::new(TBRW::default())),
         );
-        Ok(self.next_sid)
+        Ok(self.next_cid)
     }
 }

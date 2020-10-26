@@ -1,4 +1,4 @@
-use crate::head_proto::wan::{MsgEnum,NetMsg};
+use crate::head_proto::wan::{MsgEnum, NetMsg};
 
 use crate::wan_tcp_rw::WanTcpRw;
 use mini_socket::exc_kind::ExcKind;
@@ -74,9 +74,9 @@ fn worker_closure(
     Box::new(
         move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<NetMsg>| {
+            let mut net_msg_cb_fn = |cid: u32, vec_msg: Vec<NetMsg>| {
                 for msg in vec_msg {
-                    match sender.try_send(MsgEnum::NetMsg(sid, msg)) {
+                    match sender.try_send(MsgEnum::NetMsg(cid, msg)) {
                         Ok(_) => {}
                         Err(TrySendError::Full(_)) => {
                             error!("WanService try_send Full");
@@ -87,8 +87,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |sid: u64, ekd: ExcKind| {
-                match sender.try_send(MsgEnum::ExcMsg(sid, ekd)) {
+            let mut msg_kind_cb_fn = |cid: u32, ekd: ExcKind| {
+                match sender.try_send(MsgEnum::ExcMsg(cid, ekd)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("WanService try_send Full");
@@ -130,13 +130,13 @@ fn worker_closure(
                 //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(MsgEnum::NetMsg(sid,msg)) => {
+                        Ok(MsgEnum::NetMsg(cid, msg)) => {
                             //这里要优化 判断是否广播消息
-                            tcp_listen_service.write_net_msg(sid, msg);
+                            tcp_listen_service.write_net_msg(cid, msg);
                         }
-                        Ok(MsgEnum::ExcMsg(sid,ekd)) => {
+                        Ok(MsgEnum::ExcMsg(cid, ekd)) => {
                             if ekd == ExcKind::CloseSocket {
-                                tcp_listen_service.del_tcp_socket(sid);
+                                tcp_listen_service.del_tcp_socket(cid);
                             }
                         }
                         Err(TryRecvError::Empty) => break,
