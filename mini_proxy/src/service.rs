@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
 use crate::head_proto::{lan,wan};
-use crate::uid_map::UIdMap;
+use crate::id_map::IdMap;
 use mini_socket::exc_kind::ExcKind;
 
 use crate::wan_service::WanService;
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 /// 用于把 广域网的数据 转到 局域网服务中
 pub struct Service {
-    net_auth: UIdMap,
+    id_map: IdMap,
     wan_service: WanService,
     lan_service: LanService,
     single_max_task_num: u16,
@@ -42,7 +42,7 @@ impl Service {
             lan_service,
             sleep_duration,
             single_max_task_num,
-            net_auth: UIdMap::new(),
+            id_map: IdMap::new(),
         })
     }
 
@@ -70,7 +70,7 @@ impl Service {
                 //要把tcp_socket id  转 用户id
                 Some(wan::MsgEnum::NetMsg(wan_sid, msg)) => {
                     //sid 连接wan 的sid
-                    if let Some(uid) = self.net_auth.cid_to_uid(wan_sid) {
+                    if let Some(uid) = self.id_map.cid_to_uid(wan_sid) {
                         let lan_msg = lan::NetMsg{
                             uid:*uid, pid:msg.pid, ext: msg.ext, data:msg.data
                         };
@@ -88,7 +88,7 @@ impl Service {
 
                 //要把tcp_socket id  转 用户id
                 Some(wan::MsgEnum::ExcMsg(wan_sid, ekd)) => {
-                    if let Some(uid) = self.net_auth.cid_to_uid(wan_sid) {
+                    if let Some(uid) = self.id_map.cid_to_uid(wan_sid) {
                         let lan_msg = lan::NetMsg{
                             uid:*uid, pid: ekd as u16, ext: 0, data:vec![]
                         };
@@ -119,7 +119,7 @@ impl Service {
                 Some(lan::MsgEnum::NetMsg(sid, msg)) => {
                     //sid 对应服务连接id
                     //要把 用户id 转 tcp_socket id
-                    if let Some(wan_sid) = self.net_auth.uid_to_cid(msg.uid){
+                    if let Some(wan_sid) = self.id_map.uid_to_cid(msg.uid){
                          // 判断 
                         if ExcKind::is_exckind(msg.pid){
                             let ekd = ExcKind::from(msg.pid);

@@ -2,8 +2,7 @@ mod config;
 mod head_proto;
 mod lan_service;
 mod lan_tcp_rw;
-mod pid_map;
-mod uid_map;
+mod id_map;
 mod wan_service;
 mod wan_tcp_rw;
 

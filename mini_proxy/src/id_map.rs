@@ -1,20 +1,25 @@
 /// 每个连接的第一个包做身份认识
 use std::collections::HashMap;
 
-pub struct UIdMap {
+pub struct IdMap {
     /// 认识服id
     //cid: u64,
     /// 认证后的 conn id -->user id
     cid_uid: HashMap<u32, u64>,
     /// 认证后的 user id-->conn id
     uid_cid: HashMap<u64, u32>,
+
+    /// 可以优化改成数组
+    /// pid(协议) sid(服务id)
+    pub pid_sid: HashMap<u16, u16>,
 }
 
-impl UIdMap {
+impl IdMap {
     pub fn new() -> Self {
-        UIdMap {
+        IdMap {
             cid_uid: HashMap::new(),
             uid_cid: HashMap::new(),
+            pid_sid: HashMap::new(),
         }
     }
 
@@ -54,5 +59,27 @@ impl UIdMap {
             }
             None => false,
         }
+    }
+
+    #[inline]
+    /// sid(服务id)  
+    pub fn del_sid(&mut self, sid:u16){
+        self.pid_sid.retain(|_, val|{
+            *val != sid
+        })
+    }
+
+    #[inline]
+    /// sid(服务id)  vec_pid(协议id列表)
+    pub fn add_sid_pid(&mut self, sid:u16, vec_pid: Vec<u16>){
+        for pid in vec_pid {
+            self.pid_sid.insert(pid, sid);
+        }
+    }
+
+    #[inline]
+    /// 根据协议Id获取服务Id
+    pub fn get_sid(&self, pid: u16)->Option<&u16>{
+        self.pid_sid.get(&pid)
     }
 }

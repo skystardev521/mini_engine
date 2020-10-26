@@ -6,7 +6,7 @@ use mini_utils::logger::Logger;
 use std::thread::{self, Builder};
 use std::time::Duration;
 
-mod uid_map;
+mod id_map;
 mod config;
 mod lan_service;
 mod lan_tcp_rw;
