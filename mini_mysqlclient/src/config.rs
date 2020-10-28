@@ -1,22 +1,22 @@
-use mini_utils::worker_config::WorkerConfig;
+use mini_utils::wconfig::WConfig;
 use std::ffi::{CStr, CString};
 
 #[derive(Clone)]
 pub struct Config {
     pub worker_num: u8,
-    pub worker_config: WorkerConfig,
+    pub wconfig: WConfig,
     pub vec_connect_config: Vec<ConnConfig>,
 }
 
 impl Config {
     pub fn new(
         worker_num: u8,
-        worker_config: WorkerConfig,
+        wconfig: WConfig,
         vec_connect_config: Vec<ConnConfig>,
     ) -> Self {
         Config {
             worker_num,
-            worker_config,
+            wconfig,
             vec_connect_config,
         }
     }

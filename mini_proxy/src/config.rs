@@ -1,9 +1,9 @@
 use mini_socket::tcp_listen_config::TcpListenConfig;
-use mini_utils::worker_config::WorkerConfig;
+use mini_utils::wconfig::WConfig;
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub worker_config: WorkerConfig,
+    pub wconfig: WConfig,
     pub wan_listen_config: TcpListenConfig,
     pub lan_listen_config: TcpListenConfig,
 }
@@ -11,7 +11,7 @@ pub struct Config {
 impl Config {
     pub fn new() -> Self {
         Config {
-            worker_config: WorkerConfig::new(),
+            wconfig: WConfig::new(),
             wan_listen_config: TcpListenConfig::new(),
             lan_listen_config: TcpListenConfig::new(),
         }

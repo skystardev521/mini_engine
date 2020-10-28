@@ -30,8 +30,8 @@ pub struct TcpConnectService<'a, TBRW, MSG> {
     phantom: PhantomData<TBRW>,
     vec_tcp_connect: Vec<TcpConnect<MSG>>,
     vec_epoll_event: Vec<libc::epoll_event>,
-    net_msg_cb_fn: &'a mut dyn Fn(u32, Vec<MSG>),
-    exc_msg_cb_fn: &'a mut dyn Fn(u32, ExcKind),
+    net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
+    exc_msg_cb_fn: &'a mut dyn Fn(u64, ExcKind),
 }
 
 impl<'a, TBRW, MSG> Drop for TcpConnectService<'a, TBRW, MSG> {
@@ -50,8 +50,8 @@ where
 {
     pub fn new(
         vec_tcp_connect_config: Vec<TcpConnectConfig>,
-        net_msg_cb_fn: &'a mut dyn Fn(u32, Vec<MSG>),
-        exc_msg_cb_fn: &'a mut dyn Fn(u32, ExcKind),
+        net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
+        exc_msg_cb_fn: &'a mut dyn Fn(u64, ExcKind),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
         let tcp_connect_num = vec_tcp_connect_config.len();
@@ -103,13 +103,13 @@ where
                 for n in 0..epevs as usize {
                     let event = self.vec_epoll_event[n];
                     if (event.events & libc::EPOLLIN as u32) != 0 {
-                        self.read_event(event.u64 as u32);
+                        self.read_event(event.u64);
                     }
                     if (event.events & libc::EPOLLOUT as u32) != 0 {
-                        self.write_event(event.u64 as u32);
+                        self.write_event(event.u64);
                     }
                     if (event.events & libc::EPOLLERR as u32) != 0 {
-                        self.error_event(event.u64 as u32, Error::last_os_error().to_string());
+                        self.error_event(event.u64, Error::last_os_error().to_string());
                     }
                 }
                 Ok(epevs)
@@ -118,7 +118,7 @@ where
         }
     }
 
-    fn read_event(&mut self, cid: u32) {
+    fn read_event(&mut self, cid: u64) {
         //info!("read id:{}", id);
         if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(cid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
@@ -145,7 +145,7 @@ where
     }
 
     #[inline]
-    pub fn write_net_msg(&mut self, cid: u32, msg: MSG) {
+    pub fn write_msg(&mut self, cid: u64, msg: MSG) {
         match self.vec_tcp_connect.get_mut(cid as usize) {
             Some(tcp_connect) => {
                 let msg_deque_max_len = tcp_connect.get_config().msg_deque_max_len;
@@ -171,13 +171,13 @@ where
                 }
             }
             None => {
-                warn!("write_net_msg socket id no exitis:{}", cid);
+                warn!("write_msg socket id no exitis:{}", cid);
                 (self.exc_msg_cb_fn)(cid, ExcKind::SocketIdNotExist);
             }
         }
     }
 
-    fn write_event(&mut self, cid: u32) {
+    fn write_event(&mut self, cid: u64) {
         if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(cid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 if let Err(err) = write_data(&self.os_epoll, cid, tcp_socket) {
@@ -194,7 +194,7 @@ where
         }
     }
 
-    fn error_event(&mut self, cid: u32, err: String) {
+    fn error_event(&mut self, cid: u64, err: String) {
         warn!("error_event cid:{} error:{}", cid, err);
         if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(cid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
@@ -244,7 +244,7 @@ where
     vec_tcp_connect
 }
 
-fn epoll_del_fd(os_epoll: &OSEpoll, cid: u32, raw_fd: RawFd) {
+fn epoll_del_fd(os_epoll: &OSEpoll, cid: u64, raw_fd: RawFd) {
     if let Err(err) = os_epoll.ctl_del_fd(cid, raw_fd) {
         warn!("os_epoll.ctl_del_fd({}) Error:{}", cid, err);
     }
@@ -252,7 +252,7 @@ fn epoll_del_fd(os_epoll: &OSEpoll, cid: u32, raw_fd: RawFd) {
 
 fn write_data<MSG>(
     os_epoll: &OSEpoll,
-    cid: u32,
+    cid: u64,
     tcp_socket: &mut TcpSocket<MSG>,
 ) -> Result<(), String> {
     match tcp_socket.write() {
@@ -310,7 +310,7 @@ where
 /// 新建链接
 fn new_tcp_socket<TBRW, MSG>(
     os_epoll: &OSEpoll,
-    cid: u32,
+    cid: u64,
     config: &TcpConnectConfig,
 ) -> Result<TcpSocket<MSG>, String>
 where

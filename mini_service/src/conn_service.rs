@@ -2,7 +2,7 @@ use crate::lan_tcp_rw::LanTcpRw;
 use mini_socket::exc_kind::ExcKind;
 use mini_socket::tcp_connect_config::TcpConnectConfig;
 use mini_socket::tcp_connect_service::TcpConnectService;
-use mini_utils::worker_config::WorkerConfig;
+use mini_utils::wconfig::WConfig;
 
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
@@ -13,7 +13,7 @@ use log::{error, warn};
 use mini_utils::worker::RecvResEnum;
 use mini_utils::worker::SendResEnum;
 use mini_utils::worker::Worker;
-use crate::head_proto::lan::{MsgEnum, NetMsg};
+use crate::proto_head::{MsgEnum, NetMsg};
 
 /// 收发广域网的数据
 pub struct ConnService {
@@ -22,7 +22,7 @@ pub struct ConnService {
 
 impl ConnService {
     pub fn new(
-        workers_config: &WorkerConfig,
+        workers_config: &WConfig,
         vec_tcp_connect_config: Vec<TcpConnectConfig>,
     ) -> Result<Self, String> {
         //let max_task_num = workers_config.get_single_max_task_num();
@@ -85,7 +85,7 @@ fn worker_closure(
                 }
             };
 
-            let mut msg_kind_cb_fn = |sid: u32, err_msg: ExcKind| {
+            let mut msg_kind_cb_fn = |sid: u64, err_msg: ExcKind| {
                 match sender.try_send(MsgEnum::ExcMsg(sid, err_msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
@@ -130,7 +130,7 @@ fn worker_closure(
                     match receiver.try_recv() {
                         Ok(MsgEnum::NetMsg(sid, net_msg)) => {
                             //这里要优化 判断是否广播消息
-                            tcp_connect_service.write_net_msg(sid, net_msg);
+                            tcp_connect_service.write_msg(sid, net_msg);
                         }
                         Ok(MsgEnum::ExcMsg(_sid, ekd)) => {}
                         Err(TryRecvError::Empty) => break,

@@ -7,7 +7,7 @@ use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 
-use crate::head_proto::lan::NetMsg;
+use mini_socket::tcp_socket_msg::MsgData;
 
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;
@@ -52,7 +52,7 @@ macro_rules! copy_data {
 //id: u16, msize: usize, msg: &NetMsg, buffer: &mut [u8]
 macro_rules! fill_head_data {
     ($id:expr, $buf:expr, $msg:expr) => {
-        let msize = $msg.data.len() as u32;
+        let msize = $msg.buf.len() as u32;
         let u32_val = msize << 12 + $id as u32;
         bytes::write_u32($buf, u32_val);
         bytes::write_u64(&mut $buf[4..], $msg.uid);
@@ -76,8 +76,8 @@ macro_rules! head_sign_data {
 
 macro_rules! read_head_data {
     ($buf:expr) => {
-        NetMsg {
-            data: vec![],
+        MsgData {
+            buf: vec![],
             uid: bytes::read_u64(&$buf[4..]),
             pid: bytes::read_u16(&$buf[12..]),
             ext: bytes::read_u32(&$buf[14..]),
@@ -159,10 +159,10 @@ impl LanTcpRw {
     }
 }
 
-impl TcpSocketRw<NetMsg> for LanTcpRw {
+impl TcpSocketRw<MsgData> for LanTcpRw {
     /// 把数据写到tcp buffer中
-    fn write(&mut self, socket: &mut TcpStream, msg: &mut NetMsg) -> WriteResult {
-        if MSG_MAX_SIZE < msg.data.len() {
+    fn write(&mut self, socket: &mut TcpStream, msg: &mut MsgData) -> WriteResult {
+        if MSG_MAX_SIZE < msg.buf.len() {
             return WriteResult::Error("msg size error".into());
         }
         let bw = &mut self.buf_writer;
@@ -192,7 +192,7 @@ impl TcpSocketRw<NetMsg> for LanTcpRw {
         // 写成功的字节数
         let mut wsize = 0;
         // 把包体数据写入
-        let result = Self::write_data(&msg.data[bw.body_pos..], &mut wsize, socket);
+        let result = Self::write_data(&msg.buf[bw.body_pos..], &mut wsize, socket);
         if WriteResult::Finish == result {
             bw.head_pos = 0;
             bw.body_pos = 0;
@@ -206,9 +206,9 @@ impl TcpSocketRw<NetMsg> for LanTcpRw {
 
     /// 从tcp bufferfer中读取数据
     /// buffer: 共享缓冲区 这方式用于读小包的方案
-    fn read(&mut self, socket: &mut TcpStream, buffer: &mut Vec<u8>) -> ReadResult<NetMsg> {
+    fn read(&mut self, socket: &mut TcpStream, buffer: &mut Vec<u8>) -> ReadResult<MsgData> {
         let mut in_pos = 0;
-        let mut vec_msg: Vec<NetMsg> = vec![];
+        let mut vec_msg: Vec<MsgData> = vec![];
         let br = &mut self.buf_reader;
 
         loop {
@@ -258,7 +258,7 @@ impl BufReader {
         &mut self,
         in_pos: usize,
         buffer: &Vec<u8>,
-        vec_msg: &mut Vec<NetMsg>,
+        vec_msg: &mut Vec<MsgData>,
     ) -> Option<String> {
         let mut out_pos = 0;
         loop {
@@ -306,7 +306,7 @@ impl BufReader {
             out_pos += min_len;
 
             let mut msg = read_head_data!(&self.head_data);
-            msg.data = std::mem::replace(&mut self.body_data, vec![]);
+            msg.buf = std::mem::replace(&mut self.body_data, vec![]);
             vec_msg.push(msg);
         }
     }

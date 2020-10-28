@@ -55,15 +55,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mini_service"
-version = "0.1.0"
-dependencies = [
- "log",
- "mini_socket",
- "mini_utils",
-]
-
-[[package]]
 name = "mini_socket"
 version = "0.1.0"
 dependencies = [

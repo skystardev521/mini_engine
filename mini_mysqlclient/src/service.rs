@@ -23,7 +23,7 @@ pub struct Service {
 impl Service {
     pub fn new(config: Config) -> Result<Self, String> {
         let worker_num = config.get_worker_num();
-        let single_max_task_num = config.worker_config.get_single_max_task_num();
+        let single_max_task_num = config.wconfig.get_single_max_task_num();
         let mut service = Service {
             workers: Workers::new(worker_num, single_max_task_num),
         };
@@ -36,8 +36,8 @@ impl Service {
             let name = format!("mysqlclient_{}", i);
             match Worker::new(
                 name.clone(),
-                config.worker_config.get_stack_size(),
-                config.worker_config.get_channel_size(),
+                config.wconfig.get_stack_size(),
+                config.wconfig.get_channel_size(),
                 worker_closure(name.clone(), config.clone()),
             ) {
                 Ok(worker) => {
@@ -67,12 +67,12 @@ fn worker_closure(
 ) -> Box<dyn FnOnce(Receiver<SqlTaskEnum>, SyncSender<SqlTaskEnum>) + Send> {
     Box::new(
         move |receiver: Receiver<SqlTaskEnum>, sender: SyncSender<SqlTaskEnum>| {
-            let sleep_duration = config.worker_config.get_sleep_duration();
+            let sleep_duration = config.wconfig.get_sleep_duration();
             let mut execute = Execute::new(name, sleep_duration, receiver, sender);
             execute.connect(config.vec_connect_config);
 
             let mut last_ping_timestamp = time::timestamp();
-            let sleep_duration = config.worker_config.get_sleep_duration();
+            let sleep_duration = config.wconfig.get_sleep_duration();
             loop {
                 match execute.receiver() {
                     RecvRes::Empty => {
@@ -108,10 +108,10 @@ use crate::config::ThreadConfig;
 
 
 pub fn test() {
-    let mut worker_config = ThreadConfig::new();
+    let mut wconfig = ThreadConfig::new();
     let mut vec_conn_config: Vec<ConnConfig> = Vec::new();
 
-    worker_config.set_sleep_duration(1000).set_worker_num(5);
+    wconfig.set_sleep_duration(1000).set_worker_num(5);
 
     for i in 0..10 {
         let mut config = ConnConfig::new();
@@ -122,7 +122,7 @@ pub fn test() {
         vec_conn_config.push(config);
     }
 
-    let mut service = Service::new(worker_config, vec_conn_config);
+    let mut service = Service::new(wconfig, vec_conn_config);
     service.init();
 
     let database = format!("{}_{}_{}", "dev_db", "127.0.0.1", 3306);

@@ -67,7 +67,7 @@ pub const HEAD_DATA_EXT_POS: usize = 6;
 
 /// 局域网通信消息
 #[derive(Debug)]
-pub struct LanMsg {
+pub struct MsgEnum {
     /// ser id
     pub sid: u64,
     pub msg: NetMsg,

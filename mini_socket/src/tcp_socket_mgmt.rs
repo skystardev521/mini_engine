@@ -5,18 +5,18 @@ use std::net::TcpStream;
 
 pub struct TcpSocketMgmt<MSG> {
     //不会等于零
-    next_cid: u32,
+    next_cid: u64,
     /// 监听ID
-    listen_id: u32,
+    listen_id: u64,
     /// 待发的消息队列最大长度
     msg_deque_max_len: usize,
     /// 可以优化使用别的数据结构
-    tcp_socket_hash_map: HashMap<u32, TcpSocket<MSG>>,
+    tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>,
 }
 
 impl<MSG> TcpSocketMgmt<MSG> {
-    pub fn new(listen_id: u32, max_socket: u32, msg_deque_max_len: usize) -> Self {
-        let tcp_socket_hash_map: HashMap<u32, TcpSocket<MSG>>;
+    pub fn new(listen_id: u64, max_socket: u32, msg_deque_max_len: usize) -> Self {
+        let tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>;
         if max_socket < 8 {
             tcp_socket_hash_map = HashMap::with_capacity(8);
         } else {
@@ -31,11 +31,11 @@ impl<MSG> TcpSocketMgmt<MSG> {
         }
     }
 
-    fn next_cid(&self) -> u32 {
+    fn next_cid(&self) -> u64 {
         let mut cid = self.next_cid;
         loop {
             cid += 1;
-            if cid == 0 || cid == u32::MAX {
+            if cid == 0 || cid == u64::MAX {
                 cid = 1;
             }
 
@@ -61,12 +61,12 @@ impl<MSG> TcpSocketMgmt<MSG> {
     }
 
     #[inline]
-    pub fn get_tcp_socket(&mut self, cid: u32) -> Option<&mut TcpSocket<MSG>> {
+    pub fn get_tcp_socket(&mut self, cid: u64) -> Option<&mut TcpSocket<MSG>> {
         self.tcp_socket_hash_map.get_mut(&cid)
     }
 
     #[inline]
-    pub fn del_tcp_socket(&mut self, cid: u32) -> Result<TcpSocket<MSG>, String> {
+    pub fn del_tcp_socket(&mut self, cid: u64) -> Result<TcpSocket<MSG>, String> {
         if let Some(tcp_socket) = self.tcp_socket_hash_map.remove(&cid) {
             Ok(tcp_socket)
         } else {
@@ -74,7 +74,7 @@ impl<MSG> TcpSocketMgmt<MSG> {
         }
     }
 
-    pub fn add_tcp_socket<TBRW>(&mut self, socket: TcpStream) -> Result<u32, String>
+    pub fn add_tcp_socket<TBRW>(&mut self, socket: TcpStream) -> Result<u64, String>
     where
         TBRW: TcpSocketRw<MSG> + Default + 'static,
     {

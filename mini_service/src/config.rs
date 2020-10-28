@@ -1,16 +1,16 @@
 use mini_socket::tcp_connect_config::TcpConnectConfig;
-use mini_utils::worker_config::WorkerConfig;
+use mini_utils::wconfig::WConfig;
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub worker_config: WorkerConfig,
+    pub wconfig: WConfig,
     pub vec_tcp_connect_config: Vec<TcpConnectConfig>,
 }
 
 impl Config {
     pub fn new() -> Self {
         Config {
-            worker_config: WorkerConfig::new(),
+            wconfig: WConfig::new(),
             vec_tcp_connect_config: Vec::new(),
         }
     }

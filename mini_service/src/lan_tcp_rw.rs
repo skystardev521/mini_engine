@@ -7,7 +7,7 @@ use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 
-use crate::head_proto::lan::NetMsg;
+use crate::proto_head::NetMsg;
 
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;

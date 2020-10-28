@@ -11,7 +11,7 @@ use crate::config::ConnConfig;
 use crate::service::Service;
 use crate::sql_task::SqlTask;
 use crate::sql_task::SqlTaskEnum;
-use mini_utils::worker_config::WorkerConfig;
+use mini_utils::wconfig::WConfig;
 
 #[macro_use]
 mod qresult;
@@ -32,7 +32,7 @@ fn main() {
 }
 
 pub fn test() {
-    let mut workers_config = WorkerConfig::new();
+    let mut workers_config = WConfig::new();
     let mut vec_conn_config: Vec<ConnConfig> = Vec::new();
 
     workers_config.set_sleep_duration(3);

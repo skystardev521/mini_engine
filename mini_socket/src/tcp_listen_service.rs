@@ -20,7 +20,7 @@ use std::thread;
 
 use crate::tcp_socket::TcpSocket;
 
-const TCP_LISTEN_ID: u32 = 0;
+const LISTEN_ID: u64 = 0;
 const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
 pub struct TcpListenService<'a, TBRW, MSG> {
@@ -31,8 +31,8 @@ pub struct TcpListenService<'a, TBRW, MSG> {
     config: &'a TcpListenConfig,
     tcp_socket_mgmt: TcpSocketMgmt<MSG>,
     vec_epoll_event: Vec<libc::epoll_event>,
-    net_msg_cb_fn: &'a mut dyn Fn(u32, Vec<MSG>),
-    exc_msg_cb_fn: &'a mut dyn Fn(u32, ExcKind),
+    net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
+    exc_msg_cb_fn: &'a mut dyn Fn(u64, ExcKind),
 }
 
 impl<'a, TBRW, MSG> Drop for TcpListenService<'a, TBRW, MSG> {
@@ -51,17 +51,17 @@ where
 {
     pub fn new(
         config: &'a TcpListenConfig,
-        net_msg_cb_fn: &'a mut dyn Fn(u32, Vec<MSG>),
-        exc_msg_cb_fn: &'a mut dyn Fn(u32, ExcKind),
+        net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
+        exc_msg_cb_fn: &'a mut dyn Fn(u64, ExcKind),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
 
         let tcp_listen = TcpListen::new(&config.bind_socket_addr)?;
         let rawfd = tcp_listen.get_listen().as_raw_fd();
-        os_epoll.ctl_add_fd(TCP_LISTEN_ID, rawfd, libc::EPOLLIN)?;
+        os_epoll.ctl_add_fd(LISTEN_ID, rawfd, libc::EPOLLIN)?;
 
         let tcp_socket_mgmt = TcpSocketMgmt::new(
-            TCP_LISTEN_ID,
+            LISTEN_ID,
             config.max_tcp_socket,
             config.msg_deque_max_len as usize,
         );
@@ -85,7 +85,7 @@ where
     }
 
     fn write_data(
-        cid: u32,
+        cid: u64,
         os_epoll: &OSEpoll,
         tcp_socket: &mut TcpSocket<MSG>,
     ) -> Result<(), String> {
@@ -123,18 +123,18 @@ where
             Ok(epevs) => {
                 for n in 0..epevs as usize {
                     let event = self.vec_epoll_event[n];
-                    if event.u64 as u32 == TCP_LISTEN_ID {
+                    if event.u64 == LISTEN_ID {
                         self.accept_event();
                         continue;
                     }
                     if (event.events & libc::EPOLLIN as u32) != 0 {
-                        self.read_event(event.u64 as u32);
+                        self.read_event(event.u64);
                     }
                     if (event.events & libc::EPOLLOUT as u32) != 0 {
-                        self.write_event(event.u64 as u32);
+                        self.write_event(event.u64);
                     }
                     if (event.events & libc::EPOLLERR as u32) != 0 {
-                        self.error_event(event.u64 as u32, Error::last_os_error().to_string());
+                        self.error_event(event.u64, Error::last_os_error().to_string());
                     }
                 }
                 return Ok(epevs);
@@ -143,7 +143,7 @@ where
         }
     }
 
-    fn read_event(&mut self, cid: u32) {
+    fn read_event(&mut self, cid: u64) {
         //info!("read id:{}", cid);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(cid) {
             match tcp_socket.read(&mut self.vec_share) {
@@ -163,7 +163,7 @@ where
     }
 
     #[inline]
-    pub fn write_net_msg(&mut self, cid: u32, msg: MSG) {
+    pub fn write_msg(&mut self, cid: u64, msg: MSG) {
         let msg_deque_max_len = self.tcp_socket_mgmt.get_msg_deque_max_len();
         match self.tcp_socket_mgmt.get_tcp_socket(cid) {
             Some(tcp_socket) => {
@@ -183,13 +183,13 @@ where
                 }
             }
             None => {
-                info!("write_net_msg socket id:{} no exitis", cid);
+                info!("write_msg socket id:{} no exitis", cid);
                 (self.exc_msg_cb_fn)(cid, ExcKind::SocketIdNotExist);
             }
         }
     }
 
-    fn write_event(&mut self, cid: u32) {
+    fn write_event(&mut self, cid: u64) {
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(cid) {
             if let Err(err) = Self::write_data(cid, &self.os_epoll, tcp_socket) {
                 self.del_tcp_socket(cid);
@@ -201,7 +201,7 @@ where
         }
     }
 
-    fn error_event(&mut self, cid: u32, err: String) {
+    fn error_event(&mut self, cid: u64, err: String) {
         self.del_tcp_socket(cid);
         error!("error_event cid:{} error:{}", cid, err);
         (self.exc_msg_cb_fn)(cid, ExcKind::SocketClose);
@@ -271,7 +271,7 @@ where
             }
         }
     }
-    pub fn del_tcp_socket(&mut self, cid: u32) {
+    pub fn del_tcp_socket(&mut self, cid: u64) {
         match self.tcp_socket_mgmt.del_tcp_socket(cid) {
             Ok(tcp_socket) => {
                 let rawfd = tcp_socket.socket.as_raw_fd();

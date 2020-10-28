@@ -1,29 +1,29 @@
-use crate::head_proto::wan::{MsgEnum, NetMsg};
+use mini_socket::tcp_socket_msg::{NetMsg,MsgData};
 
 use crate::wan_tcp_rw::WanTcpRw;
 use mini_socket::exc_kind::ExcKind;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
-use mini_utils::worker_config::WorkerConfig;
+use mini_utils::wconfig::WConfig;
 
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::TrySendError;
 
-use log::{error, warn};
+use log::{error};
 use mini_utils::worker::RecvResEnum;
 use mini_utils::worker::SendResEnum;
 use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
 pub struct WanService {
-    worker: Worker<MsgEnum, ()>,
+    worker: Worker<NetMsg, ()>,
 }
 
 impl WanService {
     pub fn new(
-        workers_config: &WorkerConfig,
+        workers_config: &WConfig,
         tcp_listen_config: TcpListenConfig,
     ) -> Result<Self, String> {
         let worker = Worker::new(
@@ -37,7 +37,7 @@ impl WanService {
     }
 
     #[inline]
-    pub fn receiver(&self) -> Option<MsgEnum> {
+    pub fn receiver(&self) -> Option<NetMsg> {
         match self.worker.receiver() {
             RecvResEnum::Empty => return None,
             RecvResEnum::Data(msg_enum) => {
@@ -50,7 +50,7 @@ impl WanService {
         }
     }
     #[inline]
-    pub fn sender(&self, msg: MsgEnum) -> bool {
+    pub fn sender(&self, msg: NetMsg) -> bool {
         match self.worker.sender(msg) {
             SendResEnum::Success => {
                 return true;
@@ -70,13 +70,13 @@ impl WanService {
 #[allow(dead_code)]
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
-) -> Box<dyn FnOnce(Receiver<MsgEnum>, SyncSender<MsgEnum>) + Send> {
+) -> Box<dyn FnOnce(Receiver<NetMsg>, SyncSender<NetMsg>) + Send> {
     Box::new(
-        move |receiver: Receiver<MsgEnum>, sender: SyncSender<MsgEnum>| {
+        move |receiver: Receiver<NetMsg>, sender: SyncSender<NetMsg>| {
             //-----------------------------------------------------------------------------
-            let mut net_msg_cb_fn = |cid: u32, vec_msg: Vec<NetMsg>| {
+            let mut net_msg_cb_fn = |cid: u64, vec_msg: Vec<MsgData>| {
                 for msg in vec_msg {
-                    match sender.try_send(MsgEnum::NetMsg(cid, msg)) {
+                    match sender.try_send(NetMsg::NorMsg(cid, msg)) {
                         Ok(_) => {}
                         Err(TrySendError::Full(_)) => {
                             error!("WanService try_send Full");
@@ -87,8 +87,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |cid: u32, ekd: ExcKind| {
-                match sender.try_send(MsgEnum::ExcMsg(cid, ekd)) {
+            let mut msg_kind_cb_fn = |cid: u64, ekd: ExcKind| {
+                match sender.try_send(NetMsg::ExcMsg(cid, ekd)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("WanService try_send Full");
@@ -99,7 +99,7 @@ fn worker_closure(
                 };
             };
             //-----------------------------------------------------------------------------
-            let mut tcp_listen_service: TcpListenService<WanTcpRw, NetMsg>;
+            let mut tcp_listen_service: TcpListenService<WanTcpRw, MsgData>;
             match TcpListenService::new(&tcp_listen_config, &mut net_msg_cb_fn, &mut msg_kind_cb_fn)
             {
                 Ok(service) => tcp_listen_service = service,
@@ -130,11 +130,11 @@ fn worker_closure(
                 //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(MsgEnum::NetMsg(cid, msg)) => {
+                        Ok(NetMsg::NorMsg(cid, msg)) => {
                             //这里要优化 判断是否广播消息
-                            tcp_listen_service.write_net_msg(cid, msg);
+                            tcp_listen_service.write_msg(cid, msg);
                         }
-                        Ok(MsgEnum::ExcMsg(cid, ekd)) => {
+                        Ok(NetMsg::ExcMsg(cid, ekd)) => {
                             if ekd == ExcKind::CloseSocket {
                                 tcp_listen_service.del_tcp_socket(cid);
                             }

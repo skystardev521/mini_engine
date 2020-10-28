@@ -1,8 +1,8 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
-use crate::head_proto::{lan,wan};
-use crate::id_map::IdMap;
+use crate::mucid_route::MucIdRoute;
 use mini_socket::exc_kind::ExcKind;
+use mini_socket::tcp_socket_msg::{NetMsg, MsgData};
 
 use crate::wan_service::WanService;
 use log::error;
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 /// 用于把 广域网的数据 转到 局域网服务中
 pub struct Service {
-    id_map: IdMap,
+    mucid_route: MucIdRoute,
     wan_service: WanService,
     lan_service: LanService,
     single_max_task_num: u16,
@@ -31,22 +31,22 @@ impl Drop for Service {
 
 impl Service {
     pub fn new(config: Config) -> Result<Self, String> {
-        let wan_service = WanService::new(&config.worker_config, config.wan_listen_config.clone())?;
-        let lan_service = LanService::new(&config.worker_config, config.lan_listen_config.clone())?;
+        let wan_service = WanService::new(&config.wconfig, config.wan_listen_config.clone())?;
+        let lan_service = LanService::new(&config.wconfig, config.lan_listen_config.clone())?;
 
-        let sleep_duration = config.worker_config.get_sleep_duration();
-        let single_max_task_num = config.worker_config.get_single_max_task_num();
+        let sleep_duration = config.wconfig.get_sleep_duration();
+        let single_max_task_num = config.wconfig.get_single_max_task_num();
 
         Ok(Service {
             wan_service,
             lan_service,
             sleep_duration,
             single_max_task_num,
-            id_map: IdMap::new(),
+            mucid_route: MucIdRoute::new(),
         })
     }
 
-    pub fn run(&self) {
+    pub fn run(&mut self) {
         loop {
             let mut is_sleep = true;
             if !self.wan_receiver() {
@@ -68,39 +68,43 @@ impl Service {
             match self.wan_service.receiver() {
                 None => return true,
                 //要把tcp_socket id  转 用户id
-                Some(wan::MsgEnum::NetMsg(wan_sid, msg)) => {
+                Some(NetMsg::NorMsg(cid, msg)) => {
                     //sid 连接wan 的sid
-                    if let Some(uid) = self.id_map.cid_to_uid(wan_sid) {
-                        let lan_msg = lan::NetMsg{
-                            uid:*uid, pid:msg.pid, ext: msg.ext, data:msg.data
-                        };
+                    match self.mucid_route.cid_to_uid(cid) {
+                        Some(uid)=>{
+                            let mut mut_msg = msg;
+                            mut_msg.uid = *uid;
 
-                        // 要根据 协议id 判断 发送到那个 lan_sid
-                        let lan_sid = 1;
-                        self.sender_lan(lan::MsgEnum::NetMsg(lan_sid, lan_msg));
-                    }else{
+                            // 要根据 协议id 判断 发送到那个 sid
+                            match self.mucid_route.get_sid(mut_msg.pid, mut_msg.uid){
+                                Some(sid)=>{
+                                    self.sender_lan(NetMsg::NorMsg(sid, mut_msg));
+                                }
+                                None=>{
 
+                                }
+                            }
+                        
+                        }
+                        None=>{
+
+                        }
                     }
-                    
-                    //self.sender_wan(WanMsgEnum::NetMsg(sid, msg));
-                    //self.sender_lan(LanMsgEnum::NetMsg(sid, LanNetMsg { sid: sid, msg: msg }));
                 }
 
                 //要把tcp_socket id  转 用户id
-                Some(wan::MsgEnum::ExcMsg(wan_sid, ekd)) => {
-                    if let Some(uid) = self.id_map.cid_to_uid(wan_sid) {
-                        let lan_msg = lan::NetMsg{
-                            uid:*uid, pid: ekd as u16, ext: 0, data:vec![]
-                        };
+                Some(NetMsg::ExcMsg(wan_sid, ekd)) => {
+                    match self.mucid_route.cid_to_uid(wan_sid) {
+                        Some(uid)=>{
+                            // 要根据 协议id 判断 发送到那个 lan_sid
+                            let lan_sid = 1;
+                            let msg = MsgData{uid: *uid, pid: ekd as u16, ext:0, buf:vec![]};                        
+                            self.sender_lan(NetMsg::NorMsg(lan_sid, msg));
+                        }
+                        None=>{
 
-                        // 要根据 协议id 判断 发送到那个 lan_sid
-                        let lan_sid = 1;
-                        self.sender_lan(lan::MsgEnum::NetMsg(lan_sid, lan_msg));
-                    }else{
-
+                        }
                     }
-                    //self.sender_wan(WanMsgEnum::MsgKind(sid, kind));
-                    //self.sender_lan(LanMsgEnum::MsgKind(sid, LanMsgKind { sid, kind }));
                 }
             }
             num += 1;
@@ -111,24 +115,21 @@ impl Service {
     }
 
     /// empty:true data:false
-    fn lan_receiver(&self) -> bool {
+    fn lan_receiver(&mut self) -> bool {
         let mut num = 0;
         loop {
             match self.lan_service.receiver() {
                 None => return true,
-                Some(lan::MsgEnum::NetMsg(sid, msg)) => {
+                Some(NetMsg::NorMsg(sid, msg)) => {
                     //sid 对应服务连接id
-                    //要把 用户id 转 tcp_socket id
-                    if let Some(wan_sid) = self.id_map.uid_to_cid(msg.uid){
+                    //要把 用户id 转 连接id
+                    if let Some(cid) = self.mucid_route.uid_to_cid(msg.uid){
                          // 判断 
                         if ExcKind::is_exckind(msg.pid){
                             let ekd = ExcKind::from(msg.pid);
-                            self.sender_wan(wan::MsgEnum::ExcMsg(*wan_sid, ekd));
+                            self.sender_wan(NetMsg::ExcMsg(*cid, ekd));
                         }else{
-                            let wan_msg = wan::NetMsg{
-                                pid:msg.pid,ext:msg.ext, data:msg.data
-                            };
-                            self.sender_wan(wan::MsgEnum::NetMsg(*wan_sid, wan_msg));
+                            self.sender_wan(NetMsg::NorMsg(*cid, msg));
                         }
                     }else{
 
@@ -139,14 +140,16 @@ impl Service {
                         return false;
                     }
                 }
-
                 //要把 用户id 转 tcp_socket id
-                Some(lan::MsgEnum::ExcMsg(sid, ekd)) => {
+                Some(NetMsg::ExcMsg(sid, ekd)) => {
                     // 局域网内 网络异常
                     /*
                     let wan_sid = self.auth.uid_to_sid(msg.uid);
-                    self.sender_wan(wan::MsgEnum::ExcMsg(wan_sid, ekd));
+                    self.sender_wan(NetMsg::ExcMsg(wan_sid, ekd));
                     */
+
+                    self.mucid_route.del_sid(sid);
+
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;
@@ -156,11 +159,11 @@ impl Service {
         }
     }
 
-    fn sender_wan(&self, msg: wan::MsgEnum) {
+    fn sender_wan(&self, msg: NetMsg) {
         self.wan_service.sender(msg);
     }
 
-    fn sender_lan(&self, msg: lan::MsgEnum) {
+    fn sender_lan(&self, msg: NetMsg) {
         self.lan_service.sender(msg);
     }
 

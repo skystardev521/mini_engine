@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
-pub struct WorkerConfig {
+pub struct WConfig {
     name: String,
     /// defalut:0
     stack_size: usize,
@@ -13,13 +13,13 @@ pub struct WorkerConfig {
     sleep_duration: Duration,
 }
 
-impl WorkerConfig {
+impl WConfig {
     pub fn new() -> Self {
-        WorkerConfig {
+        WConfig {
             stack_size: 0,
             channel_size: 163840,
             single_max_task_num: 1024,
-            name: String::from("WorkerConfig"),
+            name: String::from("WConfig"),
             sleep_duration: Duration::from_millis(1),
         }
     }

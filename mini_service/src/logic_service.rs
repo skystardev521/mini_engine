@@ -4,7 +4,7 @@ use log::{error, warn};
 use mini_socket::exc_kind::ExcKind;
 use std::thread;
 use std::time::Duration;
-use crate::head_proto::lan::{MsgEnum, NetMsg};
+use crate::proto_head::{MsgEnum, NetMsg};
 
 pub struct LogicService {
     sleep_duration: Duration,
@@ -25,10 +25,10 @@ impl Drop for LogicService {
 impl LogicService {
     pub fn new(config: Config) -> Result<Self, String> {
         let vec_tcp_connect_config = config.vec_tcp_connect_config.clone();
-        let conn_service = ConnService::new(&config.worker_config, vec_tcp_connect_config)?;
+        let conn_service = ConnService::new(&config.wconfig, vec_tcp_connect_config)?;
 
-        let sleep_duration = config.worker_config.get_sleep_duration();
-        let single_max_task_num = config.worker_config.get_single_max_task_num();
+        let sleep_duration = config.wconfig.get_sleep_duration();
+        let single_max_task_num = config.wconfig.get_single_max_task_num();
 
         Ok(LogicService {
             conn_service,

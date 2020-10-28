@@ -6,14 +6,13 @@ use mini_utils::logger::Logger;
 use std::thread::{self, Builder};
 use std::time::Duration;
 
-mod id_map;
 mod config;
 mod lan_service;
 mod lan_tcp_rw;
-mod head_proto;
-mod service;
+mod mucid_route;
 mod wan_service;
 mod wan_tcp_rw;
+mod service;
 
 use mini_utils::time;
 
@@ -37,7 +36,8 @@ fn main() {
     let _route_thread = route_builder.spawn(move || {
         match Service::new(config) {
             Ok(service) => {
-                service.run();
+                let mut mut_service = service;
+                mut_service.run();
             }
             Err(err) => error!("Service::new Error:{}", err),
         };
