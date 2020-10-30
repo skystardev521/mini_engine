@@ -1,4 +1,3 @@
-pub mod exc_kind;
 pub mod os_epoll;
 pub mod os_socket;
 

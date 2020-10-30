@@ -1,10 +1,10 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
 use crate::mucid_route::MucIdRoute;
-use mini_socket::tcp_socket_msg::{NetMsg, MsgData, NetSMP};
+use mini_socket::tcp_socket_msg::{NetMsg, MsgData, SProtoId};
 
 use crate::wan_service::WanService;
-use log::error;
+use log::{error,debug};
 use mini_utils::bytes;
 use std::thread;
 use std::time::Duration;
@@ -113,6 +113,7 @@ impl Service {
         }
     }
 
+    
     /// empty:true data:false
     fn lan_receiver(&mut self) -> bool {
         let mut num = 0;
@@ -120,18 +121,14 @@ impl Service {
             match self.lan_service.receiver() {
                 None => return true,
                 Some(NetMsg::NorMsg(sid, msg)) => {
-                    //sid 对应服务连接id
-                    //要把 用户id 转 连接id
-                    if let Some(cid) = self.mucid_route.uid_to_cid(msg.uid){
-                         // 判断 
-                        if NetSMP::is_NetSMP(msg.pid){
-                            let ekd = NetSMP::from(msg.pid);
-                            self.sender_wan(NetMsg::ExcMsg(*cid, ekd));
-                        }else{
-                            self.sender_wan(NetMsg::NorMsg(*cid, msg));
-                        }
+                    if let Some(spid) = SProtoId::exists(msg.pid){
+                        self.handle_spid_msg(sid, spid, msg);
                     }else{
-
+                        if let Some(cid) = self.mucid_route.uid_to_cid(msg.uid){
+                            self.sender_wan(NetMsg::NorMsg(*cid, msg));
+                        }else{
+                            debug!("uid_to_cid unknown uid:{}", msg.uid)
+                        }
                     }
                    
                     num += 1;
@@ -140,7 +137,7 @@ impl Service {
                     }
                 }
                 //要把 用户id 转 tcp_socket id
-                Some(NetMsg::ExcMsg(sid, ekd)) => {
+                Some(NetMsg::ExcMsg(sid, spid)) => {
                     // 局域网内 网络异常
                     /*
                     let wan_sid = self.auth.uid_to_sid(msg.uid);
@@ -164,6 +161,67 @@ impl Service {
 
     fn sender_lan(&self, msg: NetMsg) {
         self.lan_service.sender(msg);
+    }
+
+    fn handle_spid_msg(&mut self, sid: u64, spid: SProtoId, msg: MsgData){
+        match spid {
+            SProtoId::NewServer=> {
+                let vec_pid = Self::get_sid_proto(&msg);
+                self.mucid_route.add_sid(sid, vec_pid);
+            },
+            SProtoId::CloseSocket=> {
+                if let Some(cid) = self.mucid_route.uid_to_cid(msg.uid){
+                    self.sender_wan(NetMsg::ExcMsg(*cid, spid));
+                }else{
+                    debug!("CloseSocket unknown uid:{}", msg.uid)
+                }
+            },
+            SProtoId::SocketClose=> {
+                debug!("SocketClose uid:{}", msg.uid)
+            },
+            SProtoId::BusyServer=> {
+                debug!("BusyServer: uid:{}", msg.uid);
+            },
+            SProtoId::MsgQueueIsFull=>  {
+                debug!("MsgQueueIsFull: uid:{}", msg.uid);
+            },
+            SProtoId::ExceptionServer=> {
+                debug!("ExceptionServer: uid:{}", msg.uid);
+            },
+            SProtoId::SocketIdNotExist=> {
+                debug!("SocketIdNotExist uid:{}", msg.uid);
+            },
+            SProtoId::SocketAuthPass=> {
+                if msg.buf.len() < 8{
+                    error!("SocketAuthPass buf data error");
+                }
+                let cid = bytes::read_u64(&msg.buf);
+                self.mucid_route.add_cid_uid(cid, msg.uid);
+            },
+            SProtoId::SocketAuthNotPass=> {
+                if msg.buf.len() < 8{
+                    error!("SocketAuthNotPass buf data error");
+                }
+                let cid = bytes::read_u64(&msg.buf);
+                self.sender_wan(NetMsg::NorMsg(cid, msg));
+            },
+            
+            _=> {error!("unknown SProtoId:{:?}", msg.pid)},
+        }
+    }
+
+    fn get_sid_proto(msg: &MsgData)->Vec<u16>{
+        let mut pos;
+        let mut end_pos = 2;
+        let buf_size = msg.buf.len();
+        let mut vec_u16 = Vec::with_capacity(buf_size / 2);
+
+        while end_pos <= buf_size {
+            pos = end_pos; 
+            end_pos = end_pos + 2;
+            vec_u16.push(bytes::read_u16(&msg.buf[pos..]));
+        }
+        vec_u16
     }
 
     fn decode_id(buffer: &Vec<u8>) -> Result<u16, &str> {

@@ -1,4 +1,4 @@
-use crate::tcp_socket_msg::NetSMP;
+use crate::tcp_socket_msg::SProtoId;
 use crate::os_epoll::OSEpoll;
 use crate::os_socket;
 use crate::tcp_socket_rw::ReadResult;
@@ -31,7 +31,7 @@ pub struct TcpConnectService<'a, TBRW, MSG> {
     vec_tcp_connect: Vec<TcpConnect<MSG>>,
     vec_epoll_event: Vec<libc::epoll_event>,
     net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
-    exc_msg_cb_fn: &'a mut dyn Fn(u64, NetSMP),
+    exc_msg_cb_fn: &'a mut dyn Fn(u64, SProtoId),
 }
 
 impl<'a, TBRW, MSG> Drop for TcpConnectService<'a, TBRW, MSG> {
@@ -51,7 +51,7 @@ where
     pub fn new(
         vec_tcp_connect_config: Vec<TcpConnectConfig>,
         net_msg_cb_fn: &'a mut dyn Fn(u64, Vec<MSG>),
-        exc_msg_cb_fn: &'a mut dyn Fn(u64, NetSMP),
+        exc_msg_cb_fn: &'a mut dyn Fn(u64, SProtoId),
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
         let tcp_connect_num = vec_tcp_connect_config.len();
@@ -152,7 +152,7 @@ where
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                     if tcp_socket.vec_queue_len() > msg_deque_max_len {
                         warn!("cid:{} Msg Queue Is Full", cid);
-                        (self.exc_msg_cb_fn)(cid, NetSMP::MsgQueueIsFull);
+                        (self.exc_msg_cb_fn)(cid, SProtoId::MsgQueueIsFull);
                         return;
                     }
 
@@ -172,7 +172,7 @@ where
             }
             None => {
                 warn!("write_msg socket id no exitis:{}", cid);
-                (self.exc_msg_cb_fn)(cid, NetSMP::SocketIdNotExist);
+                (self.exc_msg_cb_fn)(cid, SProtoId::SocketIdNotExist);
             }
         }
     }

@@ -1,3 +1,5 @@
+/*
+
 //use std::ffi::CStr;
 use crate::nettask::NetTask;
 use std::io::prelude::Read;
@@ -280,3 +282,4 @@ impl TcpReader {
     }
     */
 }
+*/

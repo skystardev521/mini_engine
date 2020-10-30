@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::conn_service::ConnService;
 use log::{error, warn};
-use mini_socket::exc_kind::NetSMP;
+use mini_socket::exc_kind::SProtoId;
 use std::thread;
 use std::time::Duration;
 use crate::proto_head::{MsgEnum, NetMsg};

@@ -1,5 +1,5 @@
 use crate::lan_tcp_rw::LanTcpRw;
-use mini_socket::exc_kind::NetSMP;
+use mini_socket::exc_kind::SProtoId;
 use mini_socket::tcp_connect_config::TcpConnectConfig;
 use mini_socket::tcp_connect_service::TcpConnectService;
 use mini_utils::wconfig::WConfig;
@@ -85,7 +85,7 @@ fn worker_closure(
                 }
             };
 
-            let mut msg_kind_cb_fn = |sid: u64, err_msg: NetSMP| {
+            let mut msg_kind_cb_fn = |sid: u64, err_msg: SProtoId| {
                 match sender.try_send(MsgEnum::ExcMsg(sid, err_msg)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {

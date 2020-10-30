@@ -4,7 +4,7 @@ pub enum NetMsg{
     NorMsg(u64, MsgData),
     /// 异常消息
     /// 连接id   异常kind
-    ExcMsg(u64, NetSMP),
+    ExcMsg(u64, SProtoId),
 }
 
 /// ext用于：第1位加密，第2位压缩,3~12协议版本，13~32位事务id
@@ -19,24 +19,12 @@ pub struct MsgData {
     pub buf: Vec<u8>,
 }
 
-impl MsgData {
-    pub fn new(pid: u16)->Self{
-        MsgData{
-            pid,
-            ext:0,
-            uid:0,
-            buf:vec![]
-        }
-    }
-}
-
-
-/// 网络 系统消息协议
+/// 网络系统协议
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum NetSMP {
+pub enum SProtoId {
     /// 新的Server
     NewServer = 0,
-
+    
     /// 断开网络
     CloseSocket = 1,
 
@@ -52,32 +40,34 @@ pub enum NetSMP {
     /// 服务器异常
     ExceptionServer = 5,
 
-    /// Socket Id not exist
+    /// 连接id不存在
     SocketIdNotExist = 6,
+
+    /// 网络连接认证通过
+    SocketAuthPass = 7,
+
+    /// 网络连接认证没有通过
+    SocketAuthNotPass = 8,
 
     SysMsgIdMaxValue = 255,
 }
 
 
-
-impl NetSMP {
+impl SProtoId {
     
     #[inline]
-    pub fn is_NetSMP(v: u16)-> bool{
-        v < NetSMP::SysMsgIdMaxValue as u16
-    }
-
-    #[inline]
-    pub fn from(v: u16)->Self{
+    pub fn exists(v: u16)-> Option<Self>{
         match v {
-            0=> NetSMP::NewServer,
-            1=> NetSMP::CloseSocket,
-            2=> NetSMP::SocketClose,
-            3=> NetSMP::BusyServer,
-            4=> NetSMP::MsgQueueIsFull,
-            5=> NetSMP::ExceptionServer,
-            6=> NetSMP::SocketIdNotExist,
-            _=> NetSMP::SysMsgIdMaxValue,
+            0=> Some(SProtoId::NewServer),
+            1=> Some(SProtoId::CloseSocket),
+            2=> Some(SProtoId::SocketClose),
+            3=> Some(SProtoId::BusyServer),
+            4=> Some(SProtoId::MsgQueueIsFull),
+            5=> Some(SProtoId::ExceptionServer),
+            6=> Some(SProtoId::SocketIdNotExist),
+            7=> Some(SProtoId::SocketAuthPass),
+            8=> Some(SProtoId::SocketAuthNotPass),
+            _=> None,
         }
     }
 }
