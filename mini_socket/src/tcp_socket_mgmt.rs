@@ -79,7 +79,7 @@ impl<MSG> TcpSocketMgmt<MSG> {
         TBRW: TcpSocketRw<MSG> + Default + 'static,
     {
         if self.tcp_socket_hash_map.len() == self.tcp_socket_hash_map.capacity() {
-            return Err("Max Socket Number".into());
+            return Err("Max Socket Connect Number".into());
         }
         self.next_cid = self.next_cid();
         self.tcp_socket_hash_map.insert(

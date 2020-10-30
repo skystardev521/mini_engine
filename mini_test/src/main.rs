@@ -33,7 +33,14 @@ impl Hello for TestHello {
     }
 }
 
-impl TestHello {}
+impl TestHello {
+    pub fn new()->Self{
+        TestHello{v:0}
+    }
+    pub fn test_mut(&self)->&mut Self{
+        unsafe {&mut * (self as *const Self as * mut Self)}
+    }
+}
 
 struct TestTrait<T> {
     hello: Box<T>,
@@ -58,6 +65,8 @@ struct tv {
 pub fn test_redis_client() {
     //test_fmt!("test_fmt:{} {} {}", "a", "b", "c");
 
+    
+
     match RedisClient::redis_connect_timeout(String::from("127.0.0.1"), 6379, 1000) {
         Ok(client) => {
             let mut n = 0;
@@ -79,9 +88,21 @@ pub fn test_redis_client() {
     }
 }
 
+#[test]
+fn test_fn(){
+    TestHello::new().test_mut();
+    println!("xxx:");
+}
 
 fn main() {
+    
+    match Logger::init(&String::from("info"), &String::from("logs/test_log.log")) {
+        Ok(()) => (),
+        Err(err) => println!("Logger::init error:{}", err),
+    }
 
+    test_tcp::test();
+    
     test_redis_client();
 
     let mut wtimer = WTimer::new(1);
@@ -115,12 +136,7 @@ fn main() {
     let xxx = vec![0u8; 10];
     */
 
-    match Logger::init(&String::from("info"), &String::from("logs/test_log.log")) {
-        Ok(()) => (),
-        Err(err) => println!("Logger::init error:{}", err),
-    }
-
-    //test_tcp::test();
+    
 
     /*
         let mut thread_pool: Vec<thread::JoinHandle<()>> = vec![];

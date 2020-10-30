@@ -1,7 +1,6 @@
-use mini_socket::tcp_socket_msg::{NetMsg,MsgData};
+use mini_socket::tcp_socket_msg::{NetMsg,MsgData,NetSMP};
 
 use crate::wan_tcp_rw::WanTcpRw;
-use mini_socket::exc_kind::ExcKind;
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
 use mini_utils::wconfig::WConfig;
@@ -87,7 +86,7 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |cid: u64, ekd: ExcKind| {
+            let mut msg_kind_cb_fn = |cid: u64, ekd: NetSMP| {
                 match sender.try_send(NetMsg::ExcMsg(cid, ekd)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
@@ -135,7 +134,7 @@ fn worker_closure(
                             tcp_listen_service.write_msg(cid, msg);
                         }
                         Ok(NetMsg::ExcMsg(cid, ekd)) => {
-                            if ekd == ExcKind::CloseSocket {
+                            if ekd == NetSMP::CloseSocket {
                                 tcp_listen_service.del_tcp_socket(cid);
                             }
                         }

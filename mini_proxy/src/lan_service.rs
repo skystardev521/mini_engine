@@ -1,7 +1,5 @@
 use crate::lan_tcp_rw::LanTcpRw;
-
-use mini_socket::tcp_socket_msg::{NetMsg,MsgData};
-use mini_socket::exc_kind::ExcKind;
+use mini_socket::tcp_socket_msg::{NetMsg,MsgData,NetSMP};
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
 use mini_utils::wconfig::WConfig;
@@ -84,7 +82,7 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |sid: u64, ekd: ExcKind| {
+            let mut msg_kind_cb_fn = |sid: u64, ekd: NetSMP| {
                 match sender.try_send(NetMsg::ExcMsg(sid, ekd)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {

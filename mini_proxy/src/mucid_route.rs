@@ -64,11 +64,11 @@ impl MucIdRoute {
     }
 
     #[inline]
-    /// 根据协议Id,用户id 获取服务Id
-    pub fn get_sid(&self, pid: u16, uid: u64)->Option<u64>{
+    /// 根据协议Id, (负载均衡)id, 来获取服务Id
+    pub fn get_sid(&self, pid: u16, hash_id: u64)->Option<u64>{
         match self.mid_sid.get(&pid){
             Some(vec_sid)=>{
-                Some(vec_sid[(uid % (vec_sid.len() as u64)) as usize])
+                Some(vec_sid[(hash_id % (vec_sid.len() as u64)) as usize])
             }
             None=>None
         }

@@ -64,6 +64,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mini_test"
+version = "0.1.0"
+dependencies = [
+ "hiredis-sys",
+ "log",
+ "mini_socket",
+ "mini_utils",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mini_utils"
 version = "0.1.0"
 dependencies = [
@@ -149,18 +161,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
-]
-
-[[package]]
-name = "test_code"
-version = "0.1.0"
-dependencies = [
- "hiredis-sys",
- "log",
- "mini_socket",
- "mini_utils",
- "serde",
- "serde_json",
 ]
 
 [[package]]

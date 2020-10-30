@@ -11,10 +11,12 @@ use std::net::TcpStream;
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;
 
-///数据包头长度4个字节
+
+///数据包头长度10个字节
 /// msg id: 0 ~ 4095
-/// data size: 0 ~ (1024 * 1024)
-/// |data size:13~32位|+|MID:1~12位|pid:16|ext:32|
+/// msg size: 0 ~ (1024 * 1024)
+/// |msg size:13~32位|+|mid:1~12位|
+/// |(msg size + msg id):32|pid:16|ext:32|
 pub const MSG_HEAD_SIZE: usize = 10;
 
 /// 数据包体最大字节数
@@ -52,7 +54,7 @@ macro_rules! copy_data {
 macro_rules! fill_head_data {
     ($id:expr, $buf:expr, $msg:expr) => {
         let msize = $msg.buf.len() as u32;
-        let u32_val = msize << 12 + $id as u32;
+        let u32_val = (msize << 12) + $id as u32;
         bytes::write_u32($buf, u32_val);
         bytes::write_u16(&mut $buf[4..], $msg.pid);
         bytes::write_u32(&mut $buf[6..], $msg.ext);
@@ -284,9 +286,17 @@ impl BufReader {
                 if let Some(err) = self.check_sign_data(mid, msize) {
                     return Some(err);
                 }
-                //分配包体内存
-                self.body_pos = 0;
-                self.body_data = vec![0u8; msize];
+                //包体没有数据
+                if msize == 0{
+                    self.head_pos = 0;
+                    //没有包体的消息
+                    vec_msg.push(read_head_data!(&self.head_data));
+                    continue;
+                }else{
+                    //分配包体内存
+                    self.body_pos = 0;
+                    self.body_data = vec![0u8; msize];
+                }
             };
 
             let data_len = in_pos - out_pos;
@@ -295,30 +305,28 @@ impl BufReader {
             let min_len = min_val!(data_len, tail_len);
             copy_data!(buffer[out_pos..], self.body_data[self.body_pos..], min_len);
 
-            //不够包体数据
+
+            //不够包体所需数据
             if data_len < tail_len {
                 self.body_pos += min_len;
                 return None;
+            }else{
+                self.head_pos = 0;
+                out_pos += min_len;
+                let mut msg = read_head_data!(&self.head_data);
+                msg.buf = std::mem::replace(&mut self.body_data, vec![]);
+                vec_msg.push(msg); // 分割了一个完整的包
             }
-            self.head_pos = 0;
-            out_pos += min_len;
-            let mut msg = read_head_data!(&self.head_data);
-            msg.buf = std::mem::replace(&mut self.body_data, vec![]);
-            vec_msg.push(msg);
         }
     }
-
+    /// 检查包id 及 包字节
     #[inline]
     fn check_sign_data(&mut self, id: u16, msg_size: usize) -> Option<String> {
         if id != self.id {
-            return Some("Msg Id Error".into());
+            return Some("Msg Id does not match".into());
         }
-
         self.id = next_msg_id!(id);
 
-        if msg_size == 0 {
-            return Some("Msg Size is 0".into());
-        }
         if msg_size > MSG_MAX_SIZE {
             return Some(format!("Msg Size:{} Too Large", msg_size));
         }

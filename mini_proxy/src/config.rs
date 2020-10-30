@@ -17,7 +17,7 @@ impl Config {
         }
     }
 
-    pub fn read_config(&mut self, path: &String) -> Result<(), String> {
+    pub fn read_config(&mut self, _path: &String) -> Result<(), String> {
         self.wan_listen_config
             .set_bind_socket_addr(&"0.0.0.0:9999".into());
         self.lan_listen_config

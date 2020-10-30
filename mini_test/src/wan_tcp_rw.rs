@@ -1,3 +1,4 @@
+use mini_socket::tcp_socket_msg::MsgData;
 use mini_socket::tcp_socket_rw::ReadResult;
 use mini_socket::tcp_socket_rw::TcpSocketRw;
 use mini_socket::tcp_socket_rw::WriteResult;
@@ -7,17 +8,14 @@ use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 
-use mini_socket::tcp_socket_msg::MsgData;
-
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;
 
-///数据包头长度18个字节
+///数据包头长度4个字节
 /// msg id: 0 ~ 4095
-/// msg size: 0 ~ (1024 * 1024)
-/// |msg size:13~32位|+|mid:1~12位|
-/// |(msg size + msg id):32|pid:16|ext:32|uid:64|
-pub const MSG_HEAD_SIZE: usize = 18;
+/// data size: 0 ~ (1024 * 1024)
+/// |data size:13~32位|+|MID:1~12位|pid:16|ext:32|
+pub const MSG_HEAD_SIZE: usize = 10;
 
 /// 数据包体最大字节数
 pub const MSG_MAX_SIZE: usize = 1024 * 1024;
@@ -50,7 +48,7 @@ macro_rules! copy_data {
     };
 }
 
-//id: u16, msize: usize, msg: &NetMsg, buffer: &mut [u8]
+//id: u16, msize: usize, msg: &MsgData, buffer: &mut [u8]
 macro_rules! fill_head_data {
     ($id:expr, $buf:expr, $msg:expr) => {
         let msize = $msg.buf.len() as u32;
@@ -58,7 +56,6 @@ macro_rules! fill_head_data {
         bytes::write_u32($buf, u32_val);
         bytes::write_u16(&mut $buf[4..], $msg.pid);
         bytes::write_u32(&mut $buf[6..], $msg.ext);
-        bytes::write_u64(&mut $buf[10..], $msg.uid);
     };
 }
 
@@ -78,15 +75,15 @@ macro_rules! head_sign_data {
 macro_rules! read_head_data {
     ($buf:expr) => {
         MsgData {
+            uid: 0,
             buf: vec![],
             pid: bytes::read_u16(&$buf[4..]),
             ext: bytes::read_u32(&$buf[6..]),
-            uid: bytes::read_u64(&$buf[10..]),
         }
     };
 }
 
-pub struct LanTcpRw {
+pub struct WanTcpRw {
     buf_reader: BufReader,
     buf_writer: BufWriter,
 }
@@ -112,9 +109,9 @@ pub struct BufWriter {
     head_data: [u8; MSG_HEAD_SIZE],
 }
 
-impl Default for LanTcpRw {
+impl Default for WanTcpRw {
     fn default() -> Self {
-        LanTcpRw {
+        WanTcpRw {
             buf_reader: BufReader {
                 id: 0,
                 body_pos: 0,
@@ -133,7 +130,7 @@ impl Default for LanTcpRw {
     }
 }
 
-impl LanTcpRw {
+impl WanTcpRw {
     fn write_data(buffer: &[u8], wsize: &mut usize, socket: &mut TcpStream) -> WriteResult {
         loop {
             match socket.write(&buffer) {
@@ -160,11 +157,11 @@ impl LanTcpRw {
     }
 }
 
-impl TcpSocketRw<MsgData> for LanTcpRw {
+impl TcpSocketRw<MsgData> for WanTcpRw {
     /// 把数据写到tcp buffer中
     fn write(&mut self, socket: &mut TcpStream, msg: &mut MsgData) -> WriteResult {
         if MSG_MAX_SIZE < msg.buf.len() {
-            return WriteResult::Error(format!("msg size too large:{}", msg.buf.len()));
+            return WriteResult::Error("msg size error".into());
         }
         let bw = &mut self.buf_writer;
 
@@ -274,62 +271,53 @@ impl BufReader {
 
                 self.head_pos += min_len;
 
-                //数据不够包头长度
+                //不够包头长度
                 if min_len < tail_len {
                     return None;
                 }
 
                 out_pos += tail_len;
-                
-                //数据够包头长度，获取包头数据
+
+                //获取包头数据
                 let (mid, msize) = head_sign_data!(read_head_u32!(&self.head_data));
 
                 if let Some(err) = self.check_sign_data(mid, msize) {
                     return Some(err);
                 }
-
-                //包体没有数据
-                if msize == 0{
-                    self.head_pos = 0;
-                    //没有包体的消息
-                    vec_msg.push(read_head_data!(&self.head_data));
-                    continue;
-                }else{
-                    //分配包体内存
-                    self.body_pos = 0;
-                    self.body_data = vec![0u8; msize];
-                }
+                //分配包体内存
+                self.body_pos = 0;
+                self.body_data = vec![0u8; msize];
             };
 
             let data_len = in_pos - out_pos;
-            let tail_len = self.body_data.capacity() - self.body_pos;
+            let tail_len = self.body_data.len() - self.body_pos;
 
             let min_len = min_val!(data_len, tail_len);
-
             copy_data!(buffer[out_pos..], self.body_data[self.body_pos..], min_len);
 
-            //不够包体所以需数据
+            //不够包体数据
             if data_len < tail_len {
                 self.body_pos += min_len;
                 return None;
-            }else{
-                self.head_pos = 0;
-                out_pos += min_len;
-                let mut msg = read_head_data!(&self.head_data);
-                msg.buf = std::mem::replace(&mut self.body_data, vec![]);
-                vec_msg.push(msg); // 分割了一个完整的包
             }
+            self.head_pos = 0;
+            out_pos += min_len;
+            let mut msg = read_head_data!(&self.head_data);
+            msg.buf = std::mem::replace(&mut self.body_data, vec![]);
+            vec_msg.push(msg);
         }
     }
 
-    /// 检查包id 及 包字节
     #[inline]
     fn check_sign_data(&mut self, id: u16, msg_size: usize) -> Option<String> {
         if id != self.id {
-            return Some("Msg Id does not match".into());
+            return Some("Msg Id Error".into());
         }
         self.id = next_msg_id!(id);
 
+        if msg_size == 0 {
+            return Some("Msg Size is 0".into());
+        }
         if msg_size > MSG_MAX_SIZE {
             return Some(format!("Msg Size:{} Too Large", msg_size));
         }

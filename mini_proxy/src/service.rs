@@ -1,8 +1,7 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
 use crate::mucid_route::MucIdRoute;
-use mini_socket::exc_kind::ExcKind;
-use mini_socket::tcp_socket_msg::{NetMsg, MsgData};
+use mini_socket::tcp_socket_msg::{NetMsg, MsgData, NetSMP};
 
 use crate::wan_service::WanService;
 use log::error;
@@ -62,32 +61,32 @@ impl Service {
     }
 
     /// empty:true data:false
-    fn wan_receiver(&self) -> bool {
+    fn wan_receiver(&mut self) -> bool {
         let mut num = 0;
         loop {
             match self.wan_service.receiver() {
                 None => return true,
                 //要把tcp_socket id  转 用户id
                 Some(NetMsg::NorMsg(cid, msg)) => {
-                    //sid 连接wan 的sid
-                    match self.mucid_route.cid_to_uid(cid) {
-                        Some(uid)=>{
-                            let mut mut_msg = msg;
-                            mut_msg.uid = *uid;
 
-                            // 要根据 协议id 判断 发送到那个 sid
-                            match self.mucid_route.get_sid(mut_msg.pid, mut_msg.uid){
-                                Some(sid)=>{
-                                    self.sender_lan(NetMsg::NorMsg(sid, mut_msg));
-                                }
-                                None=>{
+                    let hash_val;
+                    let mut mut_msg = msg;
+                    if let Some(uid) = self.mucid_route.cid_to_uid(cid){
+                        hash_val = *uid;
+                        (mut_msg).uid = *uid;
+                    }else{
+                        hash_val = cid;
+                        // 新连接发过来的第一个包没有 uid
+                        self.mucid_route.add_cid_uid(cid, 0);
+                    }
 
-                                }
-                            }
-                        
+                    // 要根据 协议id 判断 发送到那个 sid
+                    match self.mucid_route.get_sid(mut_msg.pid, hash_val){
+                        Some(sid)=>{
+                            self.sender_lan(NetMsg::NorMsg(sid, mut_msg));
                         }
                         None=>{
-
+                            error!("proto id:{} no sid", mut_msg.pid);
                         }
                     }
                 }
@@ -125,8 +124,8 @@ impl Service {
                     //要把 用户id 转 连接id
                     if let Some(cid) = self.mucid_route.uid_to_cid(msg.uid){
                          // 判断 
-                        if ExcKind::is_exckind(msg.pid){
-                            let ekd = ExcKind::from(msg.pid);
+                        if NetSMP::is_NetSMP(msg.pid){
+                            let ekd = NetSMP::from(msg.pid);
                             self.sender_wan(NetMsg::ExcMsg(*cid, ekd));
                         }else{
                             self.sender_wan(NetMsg::NorMsg(*cid, msg));
