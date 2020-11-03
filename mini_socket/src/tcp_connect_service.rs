@@ -152,7 +152,7 @@ where
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                     if tcp_socket.vec_queue_len() > msg_deque_max_len {
                         warn!("cid:{} Msg Queue Is Full", cid);
-                        (self.exc_msg_cb_fn)(cid, SProtoId::MsgQueueIsFull);
+                        (self.exc_msg_cb_fn)(cid, SProtoId::MsgQueueFull);
                         return;
                     }
 
@@ -172,7 +172,7 @@ where
             }
             None => {
                 warn!("write_msg socket id no exitis:{}", cid);
-                (self.exc_msg_cb_fn)(cid, SProtoId::SocketIdNotExist);
+                (self.exc_msg_cb_fn)(cid, SProtoId::Disconnect);
             }
         }
     }

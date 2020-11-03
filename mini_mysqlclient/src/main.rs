@@ -4,7 +4,7 @@ use std::ptr::{self};
 
 use crate::qresult::MysqlResult;
 use crate::qresult::QueryResult;
-use crate::qresult::TableCellData;
+use crate::qresult::ITCData;
 
 use crate::config::Config;
 use crate::config::ConnConfig;

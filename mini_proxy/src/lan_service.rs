@@ -1,5 +1,5 @@
 use crate::lan_tcp_rw::LanTcpRw;
-use mini_socket::tcp_socket_msg::{NetMsg,MsgData,SProtoId};
+use mini_socket::tcp_socket_msg::{SrvMsg,MsgData,SProtoId};
 use mini_socket::tcp_listen_config::TcpListenConfig;
 use mini_socket::tcp_listen_service::TcpListenService;
 use mini_utils::wconfig::WConfig;
@@ -16,7 +16,7 @@ use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
 pub struct LanService {
-    worker: Worker<NetMsg, ()>,
+    worker: Worker<SrvMsg, ()>,
 }
 
 impl LanService {
@@ -35,7 +35,7 @@ impl LanService {
     }
 
     #[inline]
-    pub fn receiver(&self) -> Option<NetMsg> {
+    pub fn receiver(&self) -> Option<SrvMsg> {
         match self.worker.receiver() {
             RecvResEnum::Empty => return None,
             RecvResEnum::Data(lan_msg) => return Some(lan_msg),
@@ -46,7 +46,7 @@ impl LanService {
         }
     }
     #[inline]
-    pub fn sender(&self, msg: NetMsg) -> bool {
+    pub fn sender(&self, msg: SrvMsg) -> bool {
         match self.worker.sender(msg) {
             SendResEnum::Success => {
                 return true;
@@ -65,13 +65,13 @@ impl LanService {
 #[allow(dead_code)]
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
-) -> Box<dyn FnOnce(Receiver<NetMsg>, SyncSender<NetMsg>) + Send> {
+) -> Box<dyn FnOnce(Receiver<SrvMsg>, SyncSender<SrvMsg>) + Send> {
     Box::new(
-        move |receiver: Receiver<NetMsg>, sender: SyncSender<NetMsg>| {
+        move |receiver: Receiver<SrvMsg>, sender: SyncSender<SrvMsg>| {
             //-----------------------------------------------------------------------------
             let mut net_msg_cb_fn = |sid: u64, vec_msg: Vec<MsgData>| {
                 for msg in vec_msg {
-                    match sender.try_send(NetMsg::NorMsg(sid, msg)) {
+                    match sender.try_send(SrvMsg::new(sid, msg)) {
                         Ok(_) => {}
                         Err(TrySendError::Full(_)) => {
                             error!("LanService try_send Full");
@@ -82,8 +82,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |sid: u64, ekd: SProtoId| {
-                match sender.try_send(NetMsg::ExcMsg(sid, ekd)) {
+            let mut msg_kind_cb_fn = |sid: u64, spid: SProtoId| {
+                match sender.try_send(SrvMsg::new(sid, MsgData::new_pid(spid as u16))) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("LanService try_send Full");
@@ -126,11 +126,10 @@ fn worker_closure(
                 //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(NetMsg::NorMsg(sid, msg)) => {
+                        Ok(srv_msg) => {
                             //这里要优化 判断是否广播消息
-                            tcp_listen_service.write_msg(sid, msg);
+                            tcp_listen_service.write_msg(srv_msg.id, srv_msg.msg);
                         }
-                        Ok(NetMsg::ExcMsg(_sid, _ekd)) => {}
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Disconnected) => {
                             error!("LanService receiver.try_recv:Disconnected");

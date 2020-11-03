@@ -33,6 +33,7 @@ impl MucIdRoute {
     pub fn cid_to_uid(&self, cid: u64) -> Option<&u64> {
         self.cid_uid.get(&cid)
     }
+    
     /// 根据用户Id 获取 连接id
     #[inline]
     pub fn uid_to_cid(&self, uid: u64) -> Option<&u64> {
@@ -72,6 +73,12 @@ impl MucIdRoute {
             }
             None=>None
         }
+    }
+
+    #[inline]
+    /// 根据协议Id, 获取处理这条协议id的 所有服务Id
+    pub fn get_vec_sid(&self, pid: u16)->Option<&Vec<u64>>{
+        self.mid_sid.get(&pid)
     }
 
     #[inline]

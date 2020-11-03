@@ -4,7 +4,7 @@ pub mod test_tcp;
 pub mod wan_tcp_rw;
 use std::env;
 
-use mini_utils::wtimer::TestTimedTask;
+use mini_utils::wtimer::TestIWTask;
 use mini_utils::wtimer::WTimer;
 
 use hiredis_sys::RedisClient;
@@ -64,9 +64,6 @@ struct tv {
 
 pub fn test_redis_client() {
     //test_fmt!("test_fmt:{} {} {}", "a", "b", "c");
-
-    
-
     match RedisClient::redis_connect_timeout(String::from("127.0.0.1"), 6379, 1000) {
         Ok(client) => {
             let mut n = 0;
@@ -94,8 +91,9 @@ fn test_fn(){
     println!("xxx:");
 }
 
+
 fn main() {
-    
+
     match Logger::init(&String::from("info"), &String::from("logs/test_log.log")) {
         Ok(()) => (),
         Err(err) => println!("Logger::init error:{}", err),
@@ -109,7 +107,7 @@ fn main() {
 
     for i in 0..9 {
         println!("name:{}", i);
-        let task = Box::new(TestTimedTask {
+        let task = Box::new(TestIWTask {
             id: 0,
             name: format!("name:{}", i),
         });

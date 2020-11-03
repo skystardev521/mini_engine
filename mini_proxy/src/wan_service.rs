@@ -1,4 +1,4 @@
-use mini_socket::tcp_socket_msg::{NetMsg,MsgData,SProtoId};
+use mini_socket::tcp_socket_msg::{MsgData,SProtoId};
 
 use crate::wan_tcp_rw::WanTcpRw;
 use mini_socket::tcp_listen_config::TcpListenConfig;
@@ -17,7 +17,7 @@ use mini_utils::worker::Worker;
 
 /// 收发广域网的数据
 pub struct WanService {
-    worker: Worker<NetMsg, ()>,
+    worker: Worker<MsgData, ()>,
 }
 
 impl WanService {
@@ -36,7 +36,7 @@ impl WanService {
     }
 
     #[inline]
-    pub fn receiver(&self) -> Option<NetMsg> {
+    pub fn receiver(&self) -> Option<MsgData> {
         match self.worker.receiver() {
             RecvResEnum::Empty => return None,
             RecvResEnum::Data(msg_enum) => {
@@ -49,7 +49,7 @@ impl WanService {
         }
     }
     #[inline]
-    pub fn sender(&self, msg: NetMsg) -> bool {
+    pub fn sender(&self, msg: MsgData) -> bool {
         match self.worker.sender(msg) {
             SendResEnum::Success => {
                 return true;
@@ -69,13 +69,14 @@ impl WanService {
 #[allow(dead_code)]
 fn worker_closure(
     tcp_listen_config: TcpListenConfig,
-) -> Box<dyn FnOnce(Receiver<NetMsg>, SyncSender<NetMsg>) + Send> {
+) -> Box<dyn FnOnce(Receiver<MsgData>, SyncSender<MsgData>) + Send> {
     Box::new(
-        move |receiver: Receiver<NetMsg>, sender: SyncSender<NetMsg>| {
+        move |receiver: Receiver<MsgData>, sender: SyncSender<MsgData>| {
             //-----------------------------------------------------------------------------
             let mut net_msg_cb_fn = |cid: u64, vec_msg: Vec<MsgData>| {
-                for msg in vec_msg {
-                    match sender.try_send(NetMsg::NorMsg(cid, msg)) {
+                for mut msg in vec_msg {
+                    msg.uid = cid;
+                    match sender.try_send(msg) {
                         Ok(_) => {}
                         Err(TrySendError::Full(_)) => {
                             error!("WanService try_send Full");
@@ -86,8 +87,8 @@ fn worker_closure(
                     };
                 }
             };
-            let mut msg_kind_cb_fn = |cid: u64, ekd: SProtoId| {
-                match sender.try_send(NetMsg::ExcMsg(cid, ekd)) {
+            let mut msg_kind_cb_fn = |cid: u64, spid: SProtoId| {
+                match sender.try_send(MsgData::new_uid_pid(cid, spid as u16)) {
                     Ok(_) => {}
                     Err(TrySendError::Full(_)) => {
                         error!("WanService try_send Full");
@@ -129,13 +130,12 @@ fn worker_closure(
                 //single_write_msg_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(NetMsg::NorMsg(cid, msg)) => {
-                            //这里要优化 判断是否广播消息
-                            tcp_listen_service.write_msg(cid, msg);
-                        }
-                        Ok(NetMsg::ExcMsg(cid, ekd)) => {
-                            if ekd == SProtoId::CloseSocket {
-                                tcp_listen_service.del_tcp_socket(cid);
+                        Ok(msg_data) => {
+                            if msg_data.pid == SProtoId::Disconnect as u16 {
+                                tcp_listen_service.del_tcp_socket(msg_data.uid);
+                            }else{
+                                //这里要优化 判断是否广播消息
+                                tcp_listen_service.write_msg(msg_data.uid, msg_data);
                             }
                         }
                         Err(TryRecvError::Empty) => break,

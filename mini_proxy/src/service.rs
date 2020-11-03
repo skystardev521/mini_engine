@@ -1,10 +1,10 @@
 use crate::config::Config;
 use crate::lan_service::LanService;
 use crate::mucid_route::MucIdRoute;
-use mini_socket::tcp_socket_msg::{NetMsg, MsgData, SProtoId};
+use mini_socket::tcp_socket_msg::{SrvMsg, MsgData, SProtoId};
 
 use crate::wan_service::WanService;
-use log::{error,debug};
+use log::{error,warn,debug};
 use mini_utils::bytes;
 use std::thread;
 use std::time::Duration;
@@ -67,42 +67,38 @@ impl Service {
             match self.wan_service.receiver() {
                 None => return true,
                 //要把tcp_socket id  转 用户id
-                Some(NetMsg::NorMsg(cid, msg)) => {
-
-                    let hash_val;
-                    let mut mut_msg = msg;
-                    if let Some(uid) = self.mucid_route.cid_to_uid(cid){
-                        hash_val = *uid;
-                        (mut_msg).uid = *uid;
+                Some(msg) => {
+                    if SProtoId::exists(msg.pid){
+                        self.handle_wan_spid(SProtoId::new(msg.pid), msg);
                     }else{
-                        hash_val = cid;
-                        // 新连接发过来的第一个包没有 uid
-                        self.mucid_route.add_cid_uid(cid, 0);
-                    }
+                        let hash_val;
+                        let mut mut_msg = msg;
+                        if let Some(uid) = self.mucid_route.cid_to_uid(msg.uid){
+                            hash_val = *uid;
+                            (mut_msg).uid = *uid;
+                        }else{
+                            hash_val = msg.uid;
 
-                    // 要根据 协议id 判断 发送到那个 sid
-                    match self.mucid_route.get_sid(mut_msg.pid, hash_val){
-                        Some(sid)=>{
-                            self.sender_lan(NetMsg::NorMsg(sid, mut_msg));
-                        }
-                        None=>{
-                            error!("proto id:{} no sid", mut_msg.pid);
-                        }
-                    }
-                }
+                             // todo temp code 
+                             self.mucid_route.add_cid_uid(msg.uid, msg.uid);
 
-                //要把tcp_socket id  转 用户id
-                Some(NetMsg::ExcMsg(wan_sid, ekd)) => {
-                    match self.mucid_route.cid_to_uid(wan_sid) {
-                        Some(uid)=>{
-                            // 要根据 协议id 判断 发送到那个 lan_sid
-                            let lan_sid = 1;
-                            let msg = MsgData{uid: *uid, pid: ekd as u16, ext:0, buf:vec![]};                        
-                            self.sender_lan(NetMsg::NorMsg(lan_sid, msg));
-                        }
-                        None=>{
+                            // 新连接发过来的第一个包没有 uid
+                            self.mucid_route.add_cid_uid(msg.uid, 0);
 
                         }
+                        // todo temp code
+                        self.sender_wan(msg);
+                        /*
+                        // 要根据 协议id 判断 发送到那个 sid
+                        match self.mucid_route.get_sid(mut_msg.pid, hash_val){
+                            Some(sid)=>{
+                                self.sender_lan(NetMsg::NorMsg(sid, mut_msg));
+                            }
+                            None=>{
+                                error!("proto id:{} no server handle", mut_msg.pid);
+                            }
+                        }
+                        */
                     }
                 }
             }
@@ -120,32 +116,17 @@ impl Service {
         loop {
             match self.lan_service.receiver() {
                 None => return true,
-                Some(NetMsg::NorMsg(sid, msg)) => {
-                    if let Some(spid) = SProtoId::exists(msg.pid){
-                        self.handle_spid_msg(sid, spid, msg);
+                Some(srv_msg) => {
+                    if SProtoId::exists(srv_msg.msg.pid){
+                        self.handle_lan_spid(SProtoId::new(srv_msg.msg.pid), srv_msg);
                     }else{
-                        if let Some(cid) = self.mucid_route.uid_to_cid(msg.uid){
-                            self.sender_wan(NetMsg::NorMsg(*cid, msg));
+                        if let Some(cid) = self.mucid_route.uid_to_cid(srv_msg.msg.uid){
+                            self.sender_wan(srv_msg.msg);
                         }else{
-                            debug!("uid_to_cid unknown uid:{}", msg.uid)
+                            debug!("uid_to_cid unknown uid:{}", srv_msg.msg.uid)
                         }
                     }
                    
-                    num += 1;
-                    if num == self.single_max_task_num {
-                        return false;
-                    }
-                }
-                //要把 用户id 转 tcp_socket id
-                Some(NetMsg::ExcMsg(sid, spid)) => {
-                    // 局域网内 网络异常
-                    /*
-                    let wan_sid = self.auth.uid_to_sid(msg.uid);
-                    self.sender_wan(NetMsg::ExcMsg(wan_sid, ekd));
-                    */
-
-                    self.mucid_route.del_sid(sid);
-
                     num += 1;
                     if num == self.single_max_task_num {
                         return false;
@@ -155,71 +136,119 @@ impl Service {
         }
     }
 
-    fn sender_wan(&self, msg: NetMsg) {
+    fn sender_wan(&self, msg: MsgData) {
         self.wan_service.sender(msg);
     }
 
-    fn sender_lan(&self, msg: NetMsg) {
+    fn sender_lan(&self, msg: SrvMsg) {
         self.lan_service.sender(msg);
     }
 
-    fn handle_spid_msg(&mut self, sid: u64, spid: SProtoId, msg: MsgData){
+    fn handle_lan_spid(&mut self, spid: SProtoId, srv_msg: SrvMsg){
         match spid {
-            SProtoId::NewServer=> {
-                let vec_pid = Self::get_sid_proto(&msg);
-                self.mucid_route.add_sid(sid, vec_pid);
+            SProtoId::ServerJoin=> {
+                let vec_pid = Self::get_sid_proto(&srv_msg.msg.buf);
+                self.mucid_route.add_sid(srv_msg.id, vec_pid);
             },
-            SProtoId::CloseSocket=> {
-                if let Some(cid) = self.mucid_route.uid_to_cid(msg.uid){
-                    self.sender_wan(NetMsg::ExcMsg(*cid, spid));
+            SProtoId::ServerExit=>{
+                warn!("Server Id:{} Exit", srv_msg.id);
+                self.mucid_route.del_sid(srv_msg.id);
+            }
+            SProtoId::ExcUserData=> {
+                
+                if let Some(cid) = self.mucid_route.uid_to_cid(srv_msg.msg.uid){
+                    let mut mut_msg = srv_msg;
+                    let uid = mut_msg.msg.uid;
+                    mut_msg.msg.uid = *cid;
+                    //通知客户端数据异常
+                    self.sender_wan(mut_msg.msg.clone());
+                    //通知网络线程断开网络链接
+                    self.sender_wan(MsgData::new_pid(SProtoId::Disconnect as u16));
+
+                    mut_msg.msg.uid = uid;
+                    //然后再通知其它服务 用户已断线
+                    if let Some(vec_sid) = self.mucid_route.get_vec_sid(spid as u16){
+                        for sid in vec_sid.iter(){
+                            mut_msg.id = *sid;
+                            self.sender_lan(mut_msg.clone());
+                        }
+                    }
                 }else{
-                    debug!("CloseSocket unknown uid:{}", msg.uid)
+                    debug!("Disconnect unknown uid:{}", srv_msg.msg.uid)
                 }
             },
-            SProtoId::SocketClose=> {
-                debug!("SocketClose uid:{}", msg.uid)
+            SProtoId::ServerBusy=> {
+                debug!("ServerBusy: uid:{}", srv_msg.msg.uid);
             },
-            SProtoId::BusyServer=> {
-                debug!("BusyServer: uid:{}", msg.uid);
+            SProtoId::MsgQueueFull=>  {
+                debug!("MsgQueueFull: uid:{}", srv_msg.msg.uid);
             },
-            SProtoId::MsgQueueIsFull=>  {
-                debug!("MsgQueueIsFull: uid:{}", msg.uid);
+            SProtoId::ServerRunExc=> {
+                debug!("ServerRunExc: uid:{}", srv_msg.msg.uid);
             },
-            SProtoId::ExceptionServer=> {
-                debug!("ExceptionServer: uid:{}", msg.uid);
-            },
-            SProtoId::SocketIdNotExist=> {
-                debug!("SocketIdNotExist uid:{}", msg.uid);
-            },
-            SProtoId::SocketAuthPass=> {
-                if msg.buf.len() < 8{
-                    error!("SocketAuthPass buf data error");
+
+            SProtoId::AuthReqPass=> {
+                if srv_msg.msg.buf.len() < 8{
+                    error!("AuthReqPass buffer data error");
                 }
-                let cid = bytes::read_u64(&msg.buf);
-                self.mucid_route.add_cid_uid(cid, msg.uid);
+                let uid = bytes::read_u64(&srv_msg.msg.buf);
+                self.mucid_route.add_cid_uid(srv_msg.msg.uid, uid);
             },
-            SProtoId::SocketAuthNotPass=> {
-                if msg.buf.len() < 8{
-                    error!("SocketAuthNotPass buf data error");
-                }
-                let cid = bytes::read_u64(&msg.buf);
-                self.sender_wan(NetMsg::NorMsg(cid, msg));
+
+            SProtoId::AuthNotPass=> {
+                // 要记录当前连接验证不通过次数
+                // 超过一定次数直接断开这个连接
+                self.sender_wan(srv_msg.msg);
             },
             
-            _=> {error!("unknown SProtoId:{:?}", msg.pid)},
+            _=> {error!("unknown SProtoId:{:?}", srv_msg.msg.pid)},
+        }
+
+    }
+    fn handle_wan_spid(&mut self, spid: SProtoId, msg: MsgData){
+        match spid {
+            SProtoId::Disconnect=> {
+                if let Some(uid) = self.mucid_route.cid_to_uid(msg.uid){
+                    let hash_id = if *uid > 0 {
+                        *uid  //已认证成功的连接
+                    }else{
+                        msg.uid //未认证成功或没有认证的连接
+                    };
+
+                    if let Some(sid) = self.mucid_route.get_sid(msg.pid, hash_id){
+
+                        let msg = MsgData::new_uid_pid(*uid, msg.pid);
+
+                        self.sender_lan(SrvMsg::new(sid, msg));
+                    }else{
+                        error!("proto id:{:?} no server handle", spid);
+                    }
+                }else{
+                    debug!("Disconnect unknown cid:{}", msg.uid)
+                }
+            },
+
+            SProtoId::AuthRequest=> {
+                if let Some(sid) = self.mucid_route.get_sid(spid as u16, msg.uid){
+                    self.sender_lan(SrvMsg::new(sid, msg));
+                }else{
+                    error!("proto id:{:?} no server handle", spid);
+                }
+            },
+            _=> {error!("unknown SProtoId:{:?}", spid)},
         }
     }
 
-    fn get_sid_proto(msg: &MsgData)->Vec<u16>{
+    fn get_sid_proto(buf: &Vec<u8>)->Vec<u16>{
         let mut pos;
         let mut end_pos = 2;
-        let buf_size = msg.buf.len();
+        let buf_size = buf.len();
         let mut vec_u16 = Vec::with_capacity(buf_size / 2);
 
         while end_pos <= buf_size {
             pos = end_pos; 
             end_pos = end_pos + 2;
-            vec_u16.push(bytes::read_u16(&msg.buf[pos..]));
+            vec_u16.push(bytes::read_u16(&buf[pos..]));
         }
         vec_u16
     }

@@ -38,7 +38,7 @@ macro_rules! cascade {
 pub struct WTimer {
     wheel: Wheel,
 }
-pub trait TimedTask {
+pub trait IWTask {
     /// return true:任务完成
     fn execute(&mut self) -> bool;
 }
@@ -49,7 +49,7 @@ pub struct TEntity {
     /// 运行间隔
     pub(crate) interval: u64,
     /// 任务结构体
-    pub(crate) task: Box<dyn TimedTask>,
+    pub(crate) task: Box<dyn IWTask>,
 }
 
 struct Wheel {
@@ -120,7 +120,7 @@ impl WTimer {
         }
     }
 
-    pub fn push_task(&mut self, delay: u64, interval: u64, task: Box<dyn TimedTask>) {
+    pub fn push_task(&mut self, delay: u64, interval: u64, task: Box<dyn IWTask>) {
         let interval = if interval < self.wheel.tick_size {
             self.wheel.tick_size
         } else {
@@ -176,12 +176,12 @@ fn push_entity(wheel: &mut Wheel, entity: TEntity) {
     entity_deque.push_back(entity);
 }
 
-pub struct TestTimedTask {
+pub struct TestIWTask {
     pub id: u64,
     pub name: String,
 }
 
-impl TimedTask for TestTimedTask {
+impl IWTask for TestIWTask {
     fn execute(&mut self) -> bool {
         self.id += 1;
         if self.id == 1 || self.id % 600 == 0 {
@@ -198,7 +198,7 @@ impl TimedTask for TestTimedTask {
 #[cfg(test)]
 mod test {
     use crate::time;
-    use crate::wtimer::TestTimedTask;
+    use crate::wtimer::TestIWTask;
     use crate::wtimer::WTimer;
 
     #[test]
@@ -206,7 +206,7 @@ mod test {
         let mut wtimer = WTimer::new(1);
 
         for i in 0..9 {
-            let task = Box::new(TestTimedTask {
+            let task = Box::new(TestIWTask {
                 id: 0,
                 name: format!("name:{}", i),
             });

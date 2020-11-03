@@ -58,11 +58,11 @@ impl<MysqlResult> QueryResult<MysqlResult> {
     }
 }
 
-pub trait TableCellData<T> {
+pub trait ITCData<T> {
     fn data(&self, ptr: *const i8, size: u64) -> T;
 }
 
-impl TableCellData<i8> for i8 {
+impl ITCData<i8> for i8 {
     #[inline]
     fn data(&self, ptr: *const i8, size: u64) -> i8 {
         if ptr.is_null() || size == 0 {
@@ -79,7 +79,7 @@ impl TableCellData<i8> for i8 {
     }
 }
 
-impl TableCellData<i16> for i16 {
+impl ITCData<i16> for i16 {
     #[inline]
     fn data(&self, ptr: *const i8, size: u64) -> i16 {
         if ptr.is_null() || size == 0 {
@@ -96,7 +96,7 @@ impl TableCellData<i16> for i16 {
     }
 }
 
-impl TableCellData<i32> for i32 {
+impl ITCData<i32> for i32 {
     #[inline]
     fn data(&self, ptr: *const i8, size: u64) -> i32 {
         if ptr.is_null() || size == 0 {
@@ -113,7 +113,7 @@ impl TableCellData<i32> for i32 {
     }
 }
 
-impl TableCellData<f64> for f64 {
+impl ITCData<f64> for f64 {
     #[inline]
     fn data(&self, ptr: *const i8, size: u64) -> f64 {
         if ptr.is_null() || size == 0 {
@@ -130,7 +130,7 @@ impl TableCellData<f64> for f64 {
     }
 }
 
-impl TableCellData<Vec<i8>> for Vec<i8> {
+impl ITCData<Vec<i8>> for Vec<i8> {
     #[inline]
     fn data(&self, ptr: *const i8, size: u64) -> Vec<i8> {
         if ptr.is_null() || size == 0 {
@@ -141,7 +141,7 @@ impl TableCellData<Vec<i8>> for Vec<i8> {
     }
 }
 
-impl TableCellData<String> for String {
+impl ITCData<String> for String {
     #[inline]
     fn data(&self, ptr: *const i8, size: u64) -> String {
         if ptr.is_null() || size == 0 {
@@ -198,7 +198,7 @@ macro_rules! query_result {
                                 }else {
                                     let data = row_data_array[_field];
                                     let data_size = data_size_array[_field]; _field += 1;
-                                    TableCellData::data(&$defaults, data, data_size)
+                                    ITCData::data(&$defaults, data, data_size)
                                 }
                             },
                         )+
