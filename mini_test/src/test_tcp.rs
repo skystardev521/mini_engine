@@ -24,7 +24,7 @@ pub fn test() {
 
     thread::sleep(std::time::Duration::from_secs(1));
 
-    for _ in 0..10{
+    for _ in 0..1{
         thread_pool.push(new_client().unwrap());
     }
 
