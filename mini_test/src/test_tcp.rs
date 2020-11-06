@@ -53,10 +53,10 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
             let msg_data = encode(ext_data);
             client.push_vec_queue(msg_data);
             msg_num += 1;
-            if msg_num % 10000 == 0 {
+            if msg_num % 100 == 0 {
                 info!("write data:{} {:?}", msg_num, thread::current().id());
             }
-            if msg_num % 1000 == 0{
+            if msg_num % 100 == 0{
                 thread::sleep(std::time::Duration::from_millis(1));
             }
             if write(&mut client) == false {
