@@ -21,7 +21,13 @@ impl MucIdRoute {
         }
     }
 
-    /// 连接id 与 用户Id
+    /// 增加 连接id uid=0
+    #[inline]
+    pub fn add_cid(&mut self, cid: u64) {
+        self.cid_uid.insert(cid, 0);
+    }
+    
+    /// 增加 连接id 与 用户Id
     #[inline]
     pub fn add_cid_uid(&mut self, cid: u64, uid: u64) {
         self.cid_uid.insert(cid, uid);

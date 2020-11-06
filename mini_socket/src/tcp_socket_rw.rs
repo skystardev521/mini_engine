@@ -17,6 +17,6 @@ pub trait TcpSocketRw<MSG> {
     fn write(&mut self, socket: &mut TcpStream, data: &mut MSG) -> WriteResult;
 
     /// 从tcp buffer中读取数据
-    /// vec_share: 共享缓冲区
-    fn read(&mut self, socket: &mut TcpStream, vec_share: &mut Vec<u8>) -> ReadResult<MSG>;
+    /// share_buffer: 共享缓冲区
+    fn read(&mut self, socket: &mut TcpStream, share_buffer: &mut Vec<u8>) -> ReadResult<MSG>;
 }

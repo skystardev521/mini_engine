@@ -8,6 +8,8 @@ use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 
+//use log::{error};
+
 /// Msg Id最大值
 pub const MSG_MAX_ID: u16 = 4095;
 
@@ -205,37 +207,34 @@ impl TcpSocketRw<MsgData> for WanTcpRw {
     }
 
     /// 从tcp bufferfer中读取数据
-    /// buffer: 共享缓冲区 这方式用于读小包的方案
-    fn read(&mut self, socket: &mut TcpStream, buffer: &mut Vec<u8>) -> ReadResult<MsgData> {
+    /// share_buffer: 共享缓冲区 这方式用于读小包的方案
+    fn read(&mut self, socket: &mut TcpStream, share_buffer: &mut Vec<u8>) -> ReadResult<MsgData> {
         let mut in_pos = 0;
         let mut vec_msg: Vec<MsgData> = vec![];
         let br = &mut self.buf_reader;
 
         loop {
-            match socket.read(&mut buffer[in_pos..]) {
+            match socket.read(&mut share_buffer[in_pos..]) {
                 Ok(0) => {
                     return ReadResult::Error(vec_msg, "disconnect".into());
                 }
                 Ok(size) => {
                     in_pos += size;
-                    // 读完了TCP缓存区数据
-                    if in_pos < buffer.capacity() {
-                        match br.split_data(in_pos, buffer, &mut vec_msg) {
-                            None => {
-                                return ReadResult::Data(vec_msg);
-                            }
-                            Some(err) => {
-                                return ReadResult::Error(vec_msg, err);
-                            }
-                        }
-                    }
-                    if let Some(err) = br.split_data(in_pos, buffer, &mut vec_msg) {
+                    
+                    // 分解数据包
+                    if let Some(err) = br.split_data(in_pos, share_buffer, &mut vec_msg) {
                         return ReadResult::Error(vec_msg, err);
                     }
+                    // 读完了TCP缓存区数据
+                    if in_pos < share_buffer.capacity() {
+                        return ReadResult::Data(vec_msg);
+                    }
+
                     in_pos = 0; // 重新开始读到buffer中
                 }
                 Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
-                    match br.split_data(in_pos, buffer, &mut vec_msg) {
+                    println!("WouldBlock ts:{}", mini_utils::time::timestamp());
+                    match br.split_data(in_pos, share_buffer, &mut vec_msg) {
                         None => {
                             return ReadResult::Data(vec_msg);
                         }
@@ -245,6 +244,7 @@ impl TcpSocketRw<MsgData> for WanTcpRw {
                     }
                 }
                 Err(ref err) if err.kind() == ErrorKind::Interrupted => {
+                    println!("Interrupted ts:{}", mini_utils::time::timestamp());
                     continue; ////系统中断 再read一次
                 }
                 Err(ref err) => return ReadResult::Error(vec_msg, err.to_string()),

@@ -20,6 +20,8 @@ impl SrvMsg {
     pub fn new(id:u64, msg:MsgData)->Self{
         SrvMsg{id, msg}
     }
+
+
 }
 
 /// ext用于：第1位加密，第2位压缩,3~12协议版本，13~32位事务id
@@ -38,6 +40,11 @@ pub struct MsgData {
 
 
 impl MsgData {
+    
+    pub fn get_uid(&self)->u64{
+        self.uid
+    }
+
     #[inline]
     /// pid(协议id)
     pub fn new_pid(pid: u16)->Self{
@@ -61,6 +68,8 @@ pub enum SProtoId {
     ServerExit = 1,
 
      /// 网络连接认证请求
+     /// 如果需要Ip把ip加到最后
+     /// 或增加一条获取Id的协议
     AuthRequest = 2,
 
     /// 网络连接认证通过
@@ -90,10 +99,7 @@ pub enum SProtoId {
     /// 消息队列已满
     /// 线程或服务繁忙
     MsgQueueFull = 9,
-    
-    /// 连接id不存在
-    //ConnIdNotExist = 10,
-    
+        
     EnumMaxValue = 255,
 }
 

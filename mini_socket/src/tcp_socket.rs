@@ -57,10 +57,10 @@ impl<MSG> TcpSocket<MSG> {
     }
 
     /// 从tcp buffer中读取数据
-    /// vec_share: 共享缓冲区
+    /// share_buffer: 共享缓冲区
     #[inline]
-    pub fn read(&mut self, vec_share: &mut Vec<u8>) -> ReadResult<MSG> {
+    pub fn read(&mut self, share_buffer: &mut Vec<u8>) -> ReadResult<MSG> {
         let socket = &mut self.socket;
-        self.tcp_socket_rw.read(socket, vec_share)
+        self.tcp_socket_rw.read(socket, share_buffer)
     }
 }

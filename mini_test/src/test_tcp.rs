@@ -24,7 +24,7 @@ pub fn test() {
 
     thread::sleep(std::time::Duration::from_secs(1));
 
-    for _ in 0..300 {
+    for _ in 0..10{
         thread_pool.push(new_client().unwrap());
     }
 
@@ -53,12 +53,12 @@ fn loop_write(socket: TcpStream) -> thread::JoinHandle<()> {
             let msg_data = encode(ext_data);
             client.push_vec_queue(msg_data);
             msg_num += 1;
-            if msg_num % 1000 == 0 {
+            if msg_num % 10000 == 0 {
                 info!("write data:{} {:?}", msg_num, thread::current().id());
             }
-            //if msg_num % 10 == 0{
-            thread::sleep(std::time::Duration::from_millis(10));
-            //}
+            if msg_num % 1000 == 0{
+                thread::sleep(std::time::Duration::from_millis(1));
+            }
             if write(&mut client) == false {
                 break;
             }
@@ -113,19 +113,22 @@ fn loop_read(socket: TcpStream) -> thread::JoinHandle<()> {
 }
 
 fn read(client: &mut TcpSocket<MsgData>) -> bool {
-    let mut vec_share = vec![0u8; 1024 * 1024];
+    let mut share_buffer = vec![0u8; 1024 * 1024];
     loop {
-        match client.read(&mut vec_share) {
+        match client.read(&mut share_buffer) {
             ReadResult::Data(vec_msg) => {
+                if vec_msg.is_empty(){
+                    thread::sleep(std::time::Duration::from_millis(1));
+                }
                 for msg in vec_msg.iter(){
-                    if msg.ext % 100 == 0 {
+                    if msg.ext % 10000 == 0 {
                         info!("read ext data:{} {:?}", msg.ext, thread::current().id());
                     }
                 }
             }
             ReadResult::Error(vec_msg, err) => {
                 for msg in vec_msg.iter(){
-                    if msg.ext % 100 == 0 {
+                    if msg.ext % 10000 == 0 {
                         info!("read ext data:{} {:?}", msg.ext, thread::current().id());
                     }
                 }

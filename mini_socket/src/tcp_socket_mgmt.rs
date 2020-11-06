@@ -9,13 +9,13 @@ pub struct TcpSocketMgmt<MSG> {
     /// 监听ID
     listen_id: u64,
     /// 待发的消息队列最大长度
-    msg_deque_max_len: usize,
+    msg_deque_size: usize,
     /// 可以优化使用别的数据结构
     tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>,
 }
 
 impl<MSG> TcpSocketMgmt<MSG> {
-    pub fn new(listen_id: u64, max_socket: u32, msg_deque_max_len: usize) -> Self {
+    pub fn new(listen_id: u64, max_socket: u32, msg_deque_size: usize) -> Self {
         let tcp_socket_hash_map: HashMap<u64, TcpSocket<MSG>>;
         if max_socket < 8 {
             tcp_socket_hash_map = HashMap::with_capacity(8);
@@ -26,7 +26,7 @@ impl<MSG> TcpSocketMgmt<MSG> {
         TcpSocketMgmt {
             listen_id,
             next_cid: 0,
-            msg_deque_max_len,
+            msg_deque_size,
             tcp_socket_hash_map,
         }
     }
@@ -56,8 +56,8 @@ impl<MSG> TcpSocketMgmt<MSG> {
     }
 
     #[inline]
-    pub fn get_msg_deque_max_len(&self) -> usize {
-        self.msg_deque_max_len
+    pub fn get_msg_deque_size(&self) -> usize {
+        self.msg_deque_size
     }
 
     #[inline]

@@ -25,7 +25,7 @@ const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
 pub struct TcpListenService<'a, TBRW, MSG> {
     os_epoll: OSEpoll,
-    vec_share: Vec<u8>,
+    share_buffer: Vec<u8>,
     tcp_listen: TcpListen,
     phantom: PhantomData<TBRW>,
     config: &'a TcpListenConfig,
@@ -63,10 +63,13 @@ where
         let tcp_socket_mgmt = TcpSocketMgmt::new(
             LISTEN_ID,
             config.max_tcp_socket,
-            config.msg_deque_max_len as usize,
+            config.msg_deque_size as usize,
         );
 
-        let vec_share_size = config.socket_read_buffer as usize * 3;
+        let mut share_buffer_size = config.socket_read_buffer as usize * 2;
+        if share_buffer_size == 0 {
+            share_buffer_size = 1048576;
+        }
 
         Ok(TcpListenService {
             os_epoll,
@@ -76,7 +79,7 @@ where
             exc_msg_cb_fn,
             tcp_socket_mgmt,
             phantom: PhantomData,
-            vec_share: vec![0u8; vec_share_size],
+            share_buffer: vec![0u8; share_buffer_size],
             vec_epoll_event: vec![
                 libc::epoll_event { events: 0, u64: 0 };
                 config.epoll_max_events as usize
@@ -146,7 +149,7 @@ where
     fn read_event(&mut self, cid: u64) {
         //info!("read id:{}", cid);
         if let Some(tcp_socket) = self.tcp_socket_mgmt.get_tcp_socket(cid) {
-            match tcp_socket.read(&mut self.vec_share) {
+            match tcp_socket.read(&mut self.share_buffer) {
                 ReadResult::Data(vec_msg) => {
                     (self.net_msg_cb_fn)(cid, vec_msg);
                 }
@@ -164,10 +167,10 @@ where
 
     #[inline]
     pub fn write_msg(&mut self, cid: u64, msg: MSG) {
-        let msg_deque_max_len = self.tcp_socket_mgmt.get_msg_deque_max_len();
+        let msg_deque_size = self.tcp_socket_mgmt.get_msg_deque_size();
         match self.tcp_socket_mgmt.get_tcp_socket(cid) {
             Some(tcp_socket) => {
-                if tcp_socket.vec_queue_len() > msg_deque_max_len {
+                if tcp_socket.vec_queue_len() > msg_deque_size {
                     info!("cid:{} Msg Queue Is Full", cid);
                     (self.exc_msg_cb_fn)(cid, SProtoId::MsgQueueFull);
                     return;
@@ -226,36 +229,37 @@ where
             return;
         }
 
-        let raw_fd = socket.as_raw_fd();
-
-        /*
         if let Err(err) = socket.set_nodelay(self.config.tcp_nodelay) {
             error!("new_socket set_nodelay:{}", err);
             return;
         }
-        */
 
-        if let Err(err) = os_socket::setsockopt(
-            raw_fd,
-            libc::SOL_SOCKET,
-            libc::SO_RCVBUF,
-            self.config.socket_read_buffer,
-        ) {
-            error!("new_socket setsockopt SO_RCVBUF :{}", err);
-            return;
-        }
+        let raw_fd = socket.as_raw_fd();
 
-        if let Err(err) = os_socket::setsockopt(
-            raw_fd,
-            libc::SOL_SOCKET,
-            libc::SO_SNDBUF,
-            self.config.socket_write_buffer,
-        ) {
-            error!("new_socket setsockopt SO_SNDBUF :{}", err);
-            return;
+        if self.config.socket_read_buffer > 0{
+            if let Err(err) = os_socket::setsockopt(
+                raw_fd,
+                libc::SOL_SOCKET,
+                libc::SO_RCVBUF,
+                self.config.socket_read_buffer,
+            ) {
+                error!("new_socket setsockopt SO_RCVBUF :{}", err);
+                return;
+            }
         }
         
-
+        if self.config.socket_write_buffer > 0{
+            if let Err(err) = os_socket::setsockopt(
+                raw_fd,
+                libc::SOL_SOCKET,
+                libc::SO_SNDBUF,
+                self.config.socket_write_buffer,
+            ) {
+                error!("new_socket setsockopt SO_SNDBUF :{}", err);
+                return;
+            }
+        }
+        
         match self.tcp_socket_mgmt.add_tcp_socket::<TBRW>(socket) {
             Ok(cid) => {
                 info!("tcp_socket_mgmt.add_tcp_socket cid:{}", cid);

@@ -25,7 +25,7 @@ const EPOLL_IN_OUT: i32 = (libc::EPOLLOUT | libc::EPOLLIN) as i32;
 
 pub struct TcpConnectService<'a, TBRW, MSG> {
     os_epoll: OSEpoll,
-    vec_share: Vec<u8>,
+    share_buffer: Vec<u8>,
     epoll_max_events: u16,
     phantom: PhantomData<TBRW>,
     vec_tcp_connect: Vec<TcpConnect<MSG>>,
@@ -55,7 +55,7 @@ where
     ) -> Result<Self, String> {
         let os_epoll: OSEpoll = OSEpoll::new()?;
         let tcp_connect_num = vec_tcp_connect_config.len();
-        let vec_share_size = get_max_socket_read_buffer(&vec_tcp_connect_config) * 3;
+        let share_buffer_size = Self::get_share_buffer_size(&vec_tcp_connect_config) * 3;
         let vec_tcp_connect = init_tcp_connect::<TBRW, MSG>(&os_epoll, vec_tcp_connect_config);
 
         Ok(TcpConnectService {
@@ -64,8 +64,8 @@ where
             exc_msg_cb_fn,
             vec_tcp_connect,
             phantom: PhantomData,
-            vec_share: vec![0u8; vec_share_size],
             epoll_max_events: tcp_connect_num as u16,
+            share_buffer: vec![0u8; share_buffer_size],
             vec_epoll_event: vec![libc::epoll_event { events: 0, u64: 0 }; tcp_connect_num],
         })
     }
@@ -123,7 +123,7 @@ where
         if let Some(tcp_connect) = self.vec_tcp_connect.get_mut(cid as usize) {
             if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
                 //loop {
-                match tcp_socket.read(&mut self.vec_share) {
+                match tcp_socket.read(&mut self.share_buffer) {
                     ReadResult::Data(vec_msg) => {
                         (self.net_msg_cb_fn)(cid, vec_msg);
                     }
@@ -148,9 +148,9 @@ where
     pub fn write_msg(&mut self, cid: u64, msg: MSG) {
         match self.vec_tcp_connect.get_mut(cid as usize) {
             Some(tcp_connect) => {
-                let msg_deque_max_len = tcp_connect.get_config().msg_deque_max_len;
+                let msg_deque_size = tcp_connect.get_config().msg_deque_size;
                 if let Some(tcp_socket) = tcp_connect.get_tcp_socket_opt() {
-                    if tcp_socket.vec_queue_len() > msg_deque_max_len {
+                    if tcp_socket.vec_queue_len() > msg_deque_size {
                         warn!("cid:{} Msg Queue Is Full", cid);
                         (self.exc_msg_cb_fn)(cid, SProtoId::MsgQueueFull);
                         return;
@@ -204,17 +204,21 @@ where
                 .set_tcp_socket_opt(tcp_reconnect::<TBRW, MSG>(&self.os_epoll, &tcp_connect));
         }
     }
+
+    fn get_share_buffer_size(vec_tcp_connect_config: &Vec<TcpConnectConfig>) -> usize {
+        let mut buffer_size = 0;
+        for cfg in vec_tcp_connect_config {
+            if cfg.socket_read_buffer > buffer_size {
+                buffer_size = cfg.socket_read_buffer;
+            }
+        }
+        if buffer_size == 0{
+            buffer_size = 1048576;
+        }
+        buffer_size as usize
+    }
 }
 
-fn get_max_socket_read_buffer(vec_tcp_connect_config: &Vec<TcpConnectConfig>) -> usize {
-    let mut buffer_size = 0;
-    for cfg in vec_tcp_connect_config {
-        if cfg.socket_read_buffer > buffer_size {
-            buffer_size = cfg.socket_read_buffer;
-        }
-    }
-    buffer_size as usize
-}
 
 fn init_tcp_connect<TBRW, MSG>(
     os_epoll: &OSEpoll,
